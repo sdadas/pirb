@@ -5,9 +5,6 @@
 *.ids
 .idea
 /out/
-/cache/
-/data/
-/data_train/
 .idea_modules/
 atlassian-ide-plugin.xml
 
@@ -28,3 +25,7 @@ fabric.properties
 .cache
 .models
 venv
+runlog.txt
+/cache/
+/data/
+/data_train/

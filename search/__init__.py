@@ -2,7 +2,7 @@ from .base import *
 from .dense import *
 from .lucene import *
 from .splade import *
-from .reranker import *
+from .hybrid import *
 
 
 class AutoIndex:
