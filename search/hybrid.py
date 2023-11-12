@@ -11,9 +11,10 @@ import numpy as np
 import torch
 import xgboost as xgb
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, PreTrainedTokenizer
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, PreTrainedTokenizer, PreTrainedModel, \
+    AutoModelForSeq2SeqLM
 from data import IndexInput, IndexResult, RetrievalTask
-from search.base import SearchIndex
+from search.base import SearchIndex, SmartTemplate
 
 
 class HybridStrategy(ABC):
@@ -60,34 +61,117 @@ class WeightedHybrid(HybridStrategy):
         return {"type": "weighted", "weights": self.weights}
 
 
+class ClassifierReranker:
+
+    def __init__(self, **kwargs):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.reranker_name = kwargs["reranker_name"]
+        self.fp16 = kwargs.get("fp16", False)
+        self.bf16 = kwargs.get("bf16", False)
+        self.maxlen = kwargs.get("max_seq_length", 512)
+        self.template = kwargs.get("template", "{query}</s>{passage}")
+        model, tokenizer = self._load_classifier()
+        self.model: PreTrainedModel = model
+        self.tokenizer: PreTrainedTokenizer = tokenizer
+        self.eos = self.tokenizer.eos_token
+        assert self.eos is not None, "eos token is none"
+
+    def _load_classifier(self):
+        tokenizer = AutoTokenizer.from_pretrained(self.reranker_name)
+        model = AutoModelForSequenceClassification.from_pretrained(self.reranker_name).to(self.device)
+        model.eval()
+        if self.fp16:
+            model.half()
+        elif self.bf16:
+            model.bfloat16()
+        return model, tokenizer
+
+    def rerank(self, query: str, docs: List[str]):
+        texts = [self.template.format(query=query, passage=doc, eos=self.eos) for doc in docs]
+        tokens = self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
+        tokens.to(self.device)
+        output = self.model(**tokens)
+        logits = output.logits.detach().cpu().numpy()
+        return np.squeeze(logits).tolist()
+
+
+class Seq2SeqReranker:
+
+    def __init__(self, **kwargs):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.reranker_name = kwargs["reranker_name"]
+        self.fp16 = kwargs.get("fp16", False)
+        self.bf16 = kwargs.get("bf16", False)
+        self.maxlen = kwargs.get("max_seq_length", 512)
+        self.template = kwargs.get("template", "Query: {query} Document: {passage} Relevant:")
+        self.yes_token = kwargs.get("yes_token", "yes")
+        self.no_token = kwargs.get("no_token", "no")
+        model, tokenizer = self._load_model()
+        self.model = model
+        self.tokenizer: PreTrainedTokenizer = tokenizer
+        yes_ids = self.tokenizer.encode(self.yes_token, add_special_tokens=False, padding=False)
+        no_ids = self.tokenizer.encode(self.no_token, add_special_tokens=False, padding=False)
+        assert len(yes_ids) == 1, yes_ids
+        assert len(no_ids) == 1, no_ids
+        self.yes_id = yes_ids[0]
+        self.no_id = no_ids[0]
+        self.smart_template = SmartTemplate(self.template, self.tokenizer, self.maxlen)
+
+    def _load_model(self):
+        tokenizer = AutoTokenizer.from_pretrained(self.reranker_name, use_fast=False)
+        model = AutoModelForSeq2SeqLM.from_pretrained(self.reranker_name).to(self.device)
+        model.eval()
+        if self.fp16:
+            model.half()
+        elif self.bf16:
+            model.bfloat16()
+        return model, tokenizer
+
+    def rerank(self, query: str, docs: List[str]):
+        inputs = self._use_naive_template(query, docs)
+        inputs.to(self.device)
+        outputs = self.model.generate(
+            **inputs,
+            num_beams=1,
+            max_new_tokens=1,
+            output_scores=True,
+            return_dict_in_generate=True
+        )
+        batch_scores = outputs.scores[0][:, [self.no_id, self.yes_id]]
+        batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
+        batch_log_probs = batch_scores[:, 1].detach().tolist()
+        return batch_log_probs
+
+    def _use_smart_template(self, query: str, docs: List[str]):
+        encoded = [{"input_ids": self.smart_template.encode(query=query, passage=doc)} for doc in docs]
+        return self.tokenizer.pad(encoded, padding="longest", max_length=self.maxlen, return_tensors="pt")
+
+    def _use_naive_template(self, query: str, docs: List[str]):
+        texts = [self.template.format(query=query, passage=doc) for doc in docs]
+        return self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
+
+
 class RerankerHybrid(HybridStrategy):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.reranker_name = kwargs["reranker_name"]
-        self.reranker_type = kwargs.get("reranker_type", "classifier")
-        self.batch_size = kwargs.get("batch_size", 32)
-        self.fp16 = kwargs.get("fp16", False)
-        self.maxlen = kwargs.get("max_seq_length", 512)
-        self.template = kwargs.get("template", "{query}</s>{passage}")
         self.args = kwargs
-        assert self.reranker_type in ("classifier",)
-        self.tokenizer: Optional[PreTrainedTokenizer] = None
-        self.model = None
+        self.batch_size = kwargs.get("batch_size", 32)
+        self.reranker = None
 
-    def _load_classifier(self):
-        logging.info(f"Loading reranker {self.reranker_name}")
-        tokenizer = AutoTokenizer.from_pretrained(self.reranker_name)
-        model = AutoModelForSequenceClassification.from_pretrained(self.reranker_name).to(self.device)
-        model.eval()
-        if self.fp16: model.half()
-        self.model = model
-        self.tokenizer = tokenizer
+    def _load_reranker(self):
+        reranker_type = self.args.get("reranker_type", "classifier")
+        reranker_name = self.args['reranker_name']
+        assert reranker_type in ("classifier", "seq2seq")
+        logging.info(f"Loading {reranker_type} reranker {reranker_name}")
+        if reranker_type == "classifier":
+            self.reranker = ClassifierReranker(**self.args)
+        elif reranker_type == "seq2seq":
+            self.reranker = Seq2SeqReranker(**self.args)
 
     def merge_results(self, index_results: List[Dict], k: int) -> Dict:
-        if self.model is None or self.tokenizer is None:
-            self._load_classifier()
+        if self.reranker is None:
+            self._load_reranker()
         results = {}
         queries, passages = self._load_task_data()
         for qid in tqdm(queries.keys(), desc="Reranking results"):
@@ -102,25 +186,16 @@ class RerankerHybrid(HybridStrategy):
     def _rerank(self, qid: str, docids: List[str], queries: Dict, passages: Dict, k: int):
         query = queries[qid].text
         results = []
-        eos = self.tokenizer.eos_token
-        assert eos is not None, "eos token is none"
         for i in range(0, len(docids), self.batch_size):
             batch = docids[i:i + self.batch_size]
-            texts = [self.template.format(query=query, passage=passages[docid].text, eos=eos) for docid in batch]
+            docs = [passages[docid].text for docid in batch]
             with torch.no_grad():
-                outputs = self._rerank_batch(texts)
+                outputs = self.reranker.rerank(query, docs)
                 outputs = [outputs] if not isinstance(outputs, list) else outputs
             results.extend([IndexResult(docid, float(score)) for docid, score in zip(batch, outputs)])
         results.sort(key=lambda v: -v.score)
         results = results[:k]
         return results
-
-    def _rerank_batch(self, texts: List[str]):
-        tokens = self.tokenizer(texts, padding=True, max_length=self.maxlen, truncation=True, return_tensors="pt")
-        tokens.to(self.device)
-        output = self.model(**tokens)
-        logits = output.logits.detach().cpu().numpy()
-        return np.squeeze(logits).tolist()
 
     def _load_task_data(self):
         logging.info("Loading queries for reranker")
@@ -130,7 +205,7 @@ class RerankerHybrid(HybridStrategy):
         return queries, passages
 
     def needs_cache(self) -> bool:
-        return True
+        return False
 
     def model_dict(self) -> Dict:
         return {"type": "reranker", **self.args}

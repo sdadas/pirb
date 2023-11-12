@@ -1,13 +1,17 @@
 import gzip
+import itertools
 import json
 import os.path
+import re
 from abc import ABC
-from typing import List, Iterable, Dict, Optional
+from typing import List, Iterable, Dict, Optional, Tuple
 import faiss
 import numpy as np
 import torch
 from joblib import dump
 from sentence_transformers import SentenceTransformer
+from transformers import PreTrainedTokenizer
+
 from data import IndexInput, IndexResult
 
 
@@ -100,3 +104,59 @@ class SearchIndex(ABC):
 
     def model_dict(self) -> Dict:
         raise NotImplementedError()
+
+
+class SmartTemplate:
+
+    def __init__(self, template: str, tokenizer: PreTrainedTokenizer, max_length: int):
+        self.template = template
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.template_ids, self.placeholders, self.pad_positions = self._prepare_template()
+
+    def _prepare_template(self) -> Tuple[List[int], Dict[int, str], List[int]]:
+        pad, pad_id = self.tokenizer.pad_token, self.tokenizer.pad_token_id
+        placeholders = {}
+
+        def replace_placeholder(m):
+            value = m.group(0)
+            placeholders[len(placeholders)] = value.strip("{}")
+            return pad
+        replaced = re.sub(r"\{\w+\}", replace_placeholder, self.template)
+        template_ids = self.tokenizer.encode(replaced, padding=False, truncation=False)
+        pad_positions = [idx for idx, val in enumerate(template_ids) if val == pad_id]
+        assert len(pad_positions) == len(placeholders)
+        return template_ids, placeholders, pad_positions
+
+    def encode(self, **kwargs):
+        encoded = {
+            key: self.tokenizer.encode(val, add_special_tokens=False, padding=False, truncation=False)
+            for key, val in kwargs.items()
+        }
+        return self.format_encoded(**encoded)
+
+    def format_encoded(self, **kwargs):
+        truncated = self._truncate_args(**kwargs)
+        parts = []
+        current_pos = 0
+        for idx, pad_pos in enumerate(self.pad_positions):
+            parts.append(self.template_ids[current_pos:pad_pos])
+            placeholder_key = self.placeholders[idx]
+            parts.append(truncated[placeholder_key])
+            current_pos = pad_pos + 1
+        if current_pos < len(self.template_ids):
+            parts.append(self.template_ids[current_pos:])
+        return list(itertools.chain(*parts))
+
+    def _truncate_args(self, **kwargs):
+        remaining_length = self.max_length - len(self.template_ids) + len(self.pad_positions)
+        values = sorted([(key, val) for key, val in kwargs.items()], key=lambda v: len(v[1]))
+        truncated = {}
+        for position, pair in enumerate(values):
+            key, val = pair
+            max_len_per_value = int(remaining_length / (len(values) - position))
+            if len(val) > max_len_per_value:
+                val = val[0:max_len_per_value]
+            remaining_length -= len(val)
+            truncated[key] = val
+        return truncated
