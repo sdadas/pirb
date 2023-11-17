@@ -78,12 +78,13 @@ class ClassifierReranker:
 
     def _load_classifier(self):
         tokenizer = AutoTokenizer.from_pretrained(self.reranker_name)
-        model = AutoModelForSequenceClassification.from_pretrained(self.reranker_name).to(self.device)
-        model.eval()
+        dtype = torch.float32
         if self.fp16:
-            model.half()
+            dtype = torch.float16
         elif self.bf16:
-            model.bfloat16()
+            dtype = torch.bfloat16
+        model = AutoModelForSequenceClassification.from_pretrained(self.reranker_name, torch_dtype=dtype).to(self.device)
+        model.eval()
         return model, tokenizer
 
     def rerank(self, query: str, docs: List[str]):
@@ -119,12 +120,13 @@ class Seq2SeqReranker:
 
     def _load_model(self):
         tokenizer = AutoTokenizer.from_pretrained(self.reranker_name, use_fast=False)
-        model = AutoModelForSeq2SeqLM.from_pretrained(self.reranker_name).to(self.device)
-        model.eval()
+        dtype = torch.float32
         if self.fp16:
-            model.half()
+            dtype = torch.float16
         elif self.bf16:
-            model.bfloat16()
+            dtype = torch.bfloat16
+        model = AutoModelForSeq2SeqLM.from_pretrained(self.reranker_name, torch_dtype=dtype).to(self.device)
+        model.eval()
         return model, tokenizer
 
     def rerank(self, query: str, docs: List[str]):
