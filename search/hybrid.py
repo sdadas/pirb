@@ -92,7 +92,7 @@ class ClassifierReranker:
         tokens = self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
         tokens.to(self.device)
         output = self.model(**tokens)
-        logits = output.logits.detach().cpu().numpy()
+        logits = output.logits.detach().type(torch.float32).cpu().numpy()
         return np.squeeze(logits).tolist()
 
 
