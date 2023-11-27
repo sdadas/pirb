@@ -1,3 +1,4 @@
+import itertools
 import json
 import logging
 import os.path
@@ -6,7 +7,7 @@ import shutil
 import tempfile
 from abc import ABC
 from collections import defaultdict
-from typing import List, Iterable, Dict, Optional, Tuple, Union, Set
+from typing import List, Iterable, Dict, Optional, Tuple, Union, Set, Callable
 import numpy as np
 import torch
 import xgboost as xgb
@@ -69,7 +70,7 @@ class ClassifierReranker:
         self.fp16 = kwargs.get("fp16", False)
         self.bf16 = kwargs.get("bf16", False)
         self.maxlen = kwargs.get("max_seq_length", 512)
-        self.template = kwargs.get("template", "{query}</s>{passage}")
+        self.template = kwargs.get("template", "{query}{eos}{eos}{passage}")
         model, tokenizer = self._load_classifier()
         self.model: PreTrainedModel = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
@@ -158,6 +159,7 @@ class RerankerHybrid(HybridStrategy):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.args = kwargs
+        self.rerank_limit = kwargs.get("rerank_limit", None)
         self.batch_size = kwargs.get("batch_size", 32)
         self.reranker = None
 
@@ -177,12 +179,38 @@ class RerankerHybrid(HybridStrategy):
         results = {}
         queries, passages = self._load_task_data()
         for qid in tqdm(queries.keys(), desc="Reranking results"):
-            docids: Set = set()
-            for index in index_results:
-                hits = index.get(qid, [])
-                docids.update({val.id for val in hits})
-            hits = self._rerank(qid, list(docids), queries, passages, k)
-            results[qid] = hits
+            rerank_func: Callable = self._rerank_limited if self.rerank_limit else self._rerank_all
+            results[qid] = rerank_func(qid, queries, passages, index_results, k)
+        return results
+
+    def _rerank_all(self, qid: str, queries: Dict, passages: Dict, index_results: List[Dict], k: int):
+        docids: Set = set()
+        for index in index_results:
+            hits = index.get(qid, [])
+            docids.update({val.id for val in hits})
+        return self._rerank(qid, list(docids), queries, passages, k)
+
+    def _rerank_limited(self, qid: str, queries: Dict, passages: Dict, index_results: List[Dict], k: int):
+        docids: Set = set()
+        all_hits = []
+        for index in index_results:
+            hits = index.get(qid, [])
+            all_hits.extend([hit for hit in hits if hit.id not in docids])
+            docids.update({val.id for val in hits})
+        all_docids = [hit.id for hit in all_hits]
+        reranked_hits = self._rerank(qid, all_docids[:self.rerank_limit], queries, passages, k)
+        results = []
+        last_score = 0
+        for idx in range(k):
+            if idx >= len(all_hits):
+                break
+            if idx < self.rerank_limit:
+                hit = reranked_hits[idx]
+                results.append(hit)
+                last_score = hit.score
+            else:
+                hit = all_hits[idx]
+                results.append(IndexResult(hit.id, last_score - idx))
         return results
 
     def _rerank(self, qid: str, docids: List[str], queries: Dict, passages: Dict, k: int):
@@ -342,16 +370,17 @@ class XGBRankerHybrid(HybridStrategy):
 class HybridIndex(SearchIndex):
 
     def __init__(self, data_dir: str, hybrid_name: str, indices: List[SearchIndex], k0: int,
-                 strategy: Union[HybridStrategy, Dict], task: RetrievalTask):
+                 strategy: Union[HybridStrategy, Dict], task: RetrievalTask, rerank_limit: int):
         self.data_dir = data_dir
         self.hybrid_name = hybrid_name
         self.indices = indices
-        self.strategy = strategy if isinstance(strategy, HybridStrategy) else self._load_strategy(strategy)
+        self.strategy = strategy if isinstance(strategy, HybridStrategy) else self._load_strategy(strategy, rerank_limit)
         self.strategy.task = task
         self.strategy.data_dir = data_dir
         self.k0 = k0
 
-    def _load_strategy(self, spec: Dict):
+    def _load_strategy(self, spec: Dict, rerank_limit: int):
+        spec["rerank_limit"] = rerank_limit
         strategy_type = spec["type"]
         types = {"weighted": WeightedHybrid, "xbgranker": XGBRankerHybrid, "reranker": RerankerHybrid}
         cls = types[strategy_type]

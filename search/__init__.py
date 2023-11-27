@@ -18,7 +18,8 @@ class AutoIndex:
             child_configs = config["models"]
             indices = [AutoIndex.from_config(child_config, task, args) for child_config in child_configs]
             k0 = config.get("k0", 100)
-            return HybridIndex(args.data_dir, index_name, indices, k0, config.get("strategy", None), task)
+            rerank_limit = args.rerank_limit
+            return HybridIndex(args.data_dir, index_name, indices, k0, config.get("strategy", None), task, rerank_limit)
         elif index_type == "splade":
             return SpladeIndex(config, data_dir=cache_dir, use_bettertransformer=use_bt, threads=args.threads)
         elif index_name in ("sparse", "bm25"):

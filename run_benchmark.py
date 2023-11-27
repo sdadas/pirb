@@ -66,10 +66,15 @@ class BenchmarkArgs:
         default=False,
         metadata={"help": "Overwrite any cache or results even if exists"}
     )
-    limit_queries: int = field(
+    query_limit: int = field(
         default=None,
         metadata={"help": "Maximum number of queries to use for evaluation on each dataset"}
     )
+    rerank_limit: int = field(
+        default=None,
+        metadata={"help": "Maximum number of retrieved docs to sort using reranker (all docs are sorted by default)"}
+    )
+
 
 
 class RetrievalEvaluator:
@@ -80,7 +85,7 @@ class RetrievalEvaluator:
     def eval_task(self, task: RetrievalTask, index: SearchIndex, metadata=None):
         cache_prefix = task.task_id
         needs_rebuild = not index.exists() and not index.results_exist(self.args.recall_k, cache_prefix)
-        task.limit_queries = self.args.limit_queries
+        task.limit_queries = self.args.query_limit
         if self.args.overwrite or needs_rebuild:
             index.build(task.passages(self.args.data_dir))
         queries = list(task.queries(self.args.data_dir))
