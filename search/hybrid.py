@@ -70,12 +70,12 @@ class ClassifierReranker:
         self.fp16 = kwargs.get("fp16", False)
         self.bf16 = kwargs.get("bf16", False)
         self.maxlen = kwargs.get("max_seq_length", 512)
-        self.template = kwargs.get("template", "{query}{eos}{eos}{passage}")
+        self.template = kwargs.get("template", "{query}{sep}{sep}{passage}")
         model, tokenizer = self._load_classifier()
         self.model: PreTrainedModel = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
-        self.eos = self.tokenizer.eos_token
-        assert self.eos is not None, "eos token is none"
+        self.sep = self.tokenizer.sep_token
+        assert self.sep is not None, "sep token is none"
 
     def _load_classifier(self):
         tokenizer = AutoTokenizer.from_pretrained(self.reranker_name)
@@ -89,7 +89,7 @@ class ClassifierReranker:
         return model, tokenizer
 
     def rerank(self, query: str, docs: List[str]):
-        texts = [self.template.format(query=query, passage=doc, eos=self.eos) for doc in docs]
+        texts = [self.template.format(query=query, passage=doc, sep=self.sep) for doc in docs]
         tokens = self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
         tokens.to(self.device)
         output = self.model(**tokens)
