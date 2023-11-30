@@ -111,12 +111,18 @@ class Seq2SeqReranker:
         model, tokenizer = self._load_model()
         self.model = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
-        yes_ids = self.tokenizer.encode(self.yes_token, add_special_tokens=False, padding=False)
-        no_ids = self.tokenizer.encode(self.no_token, add_special_tokens=False, padding=False)
-        assert len(yes_ids) == 1, yes_ids
-        assert len(no_ids) == 1, no_ids
-        self.yes_id = yes_ids[0]
-        self.no_id = no_ids[0]
+        if isinstance(self.yes_token, int):
+            self.yes_id = self.yes_token
+        else:
+            yes_ids = self.tokenizer.encode(self.yes_token, add_special_tokens=False, padding=False)
+            assert len(yes_ids) == 1, yes_ids
+            self.yes_id = yes_ids[0]
+        if isinstance(self.no_token, int):
+            self.no_id = self.no_token
+        else:
+            no_ids = self.tokenizer.encode(self.no_token, add_special_tokens=False, padding=False)
+            assert len(no_ids) == 1, no_ids
+            self.no_id = no_ids[0]
         self.smart_template = SmartTemplate(self.template, self.tokenizer, self.maxlen)
 
     def _load_model(self):
