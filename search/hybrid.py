@@ -1,14 +1,14 @@
-import itertools
 import json
 import logging
 import os.path
 import random
 import shutil
 import tempfile
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from typing import List, Iterable, Dict, Optional, Tuple, Union, Set, Callable
 import numpy as np
+from scipy.special import expit
 import torch
 import xgboost as xgb
 from tqdm import tqdm
@@ -24,14 +24,26 @@ class HybridStrategy(ABC):
         self.task: Optional[RetrievalTask] = None
         self.data_dir: Optional[str] = None
 
+    @abstractmethod
     def merge_results(self, index_results: List[Dict], k: int) -> Dict:
         raise NotImplementedError()
 
+    @abstractmethod
     def model_dict(self) -> Dict:
         raise NotImplementedError()
 
     def needs_cache(self) -> bool:
         return False
+
+
+class Reranker(ABC):
+
+    @abstractmethod
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        raise NotImplementedError()
+
+    def rerank(self, query: str, docs: List[str], proba: bool = False):
+        return self.rerank_pairs([query] * len(docs), docs, proba)
 
 
 class WeightedHybrid(HybridStrategy):
@@ -62,7 +74,7 @@ class WeightedHybrid(HybridStrategy):
         return {"type": "weighted", "weights": self.weights}
 
 
-class ClassifierReranker:
+class ClassifierReranker(Reranker):
 
     def __init__(self, **kwargs):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -88,16 +100,18 @@ class ClassifierReranker:
         model.eval()
         return model, tokenizer
 
-    def rerank(self, query: str, docs: List[str]):
-        texts = [self.template.format(query=query, passage=doc, sep=self.sep) for doc in docs]
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        assert len(queries) == len(docs)
+        texts = [self.template.format(query=queries[i], passage=docs[i], sep=self.sep) for i in range(len(docs))]
         tokens = self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
         tokens.to(self.device)
         output = self.model(**tokens)
         logits = output.logits.detach().type(torch.float32).cpu().numpy()
-        return np.squeeze(logits).tolist()
+        logits = np.squeeze(logits)
+        return expit(logits).tolist() if proba else logits.tolist()
 
 
-class Seq2SeqReranker:
+class Seq2SeqReranker(Reranker):
 
     def __init__(self, **kwargs):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -136,8 +150,9 @@ class Seq2SeqReranker:
         model.eval()
         return model, tokenizer
 
-    def rerank(self, query: str, docs: List[str]):
-        inputs = self._use_naive_template(query, docs)
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        assert len(queries) == len(docs)
+        inputs = self._use_naive_template(queries, docs)
         inputs.to(self.device)
         outputs = self.model.generate(
             **inputs,
@@ -147,16 +162,20 @@ class Seq2SeqReranker:
             return_dict_in_generate=True
         )
         batch_scores = outputs.scores[0][:, [self.no_id, self.yes_id]]
-        batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
-        batch_log_probs = batch_scores[:, 1].detach().tolist()
-        return batch_log_probs
+        if proba:
+            batch_scores = torch.nn.functional.softmax(batch_scores, dim=1)
+        else:
+            batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
+        batch_probs = batch_scores[:, 1].detach().tolist()
+        return batch_probs
 
-    def _use_smart_template(self, query: str, docs: List[str]):
-        encoded = [{"input_ids": self.smart_template.encode(query=query, passage=doc)} for doc in docs]
+    def _use_smart_template(self, queries: List[str], docs: List[str]):
+        num_docs = range(len(docs))
+        encoded = [{"input_ids": self.smart_template.encode(query=queries[i], passage=docs[i])} for i in num_docs]
         return self.tokenizer.pad(encoded, padding="longest", max_length=self.maxlen, return_tensors="pt")
 
-    def _use_naive_template(self, query: str, docs: List[str]):
-        texts = [self.template.format(query=query, passage=doc) for doc in docs]
+    def _use_naive_template(self, queries: List[str], docs: List[str]):
+        texts = [self.template.format(query=queries[i], passage=docs[i]) for i in range(len(docs))]
         return self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
 
 
@@ -167,7 +186,7 @@ class RerankerHybrid(HybridStrategy):
         self.args = kwargs
         self.rerank_limit = kwargs.get("rerank_limit", None)
         self.batch_size = kwargs.get("batch_size", 32)
-        self.reranker = None
+        self.reranker: Optional[Reranker] = None
 
     def _load_reranker(self):
         reranker_type = self.args.get("reranker_type", "classifier")
