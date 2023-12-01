@@ -208,6 +208,16 @@ class RerankerHybrid(HybridStrategy):
             results[qid] = rerank_func(qid, queries, passages, index_results, k)
         return results
 
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        if self.reranker is None:
+            self._load_reranker()
+        return self.reranker.rerank_pairs(queries, docs, proba)
+
+    def rerank(self, query: str, docs: List[str], proba: bool = False):
+        if self.reranker is None:
+            self._load_reranker()
+        return self.reranker.rerank(query, docs, proba)
+
     def _rerank_all(self, qid: str, queries: Dict, passages: Dict, index_results: List[Dict], k: int):
         docids: Set = set()
         for index in index_results:

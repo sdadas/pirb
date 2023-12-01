@@ -34,7 +34,7 @@ class LuceneIndex(SearchIndex):
         logging.info("Building lucene index %s", self.index_dir)
         args = [
             "-collection", "JsonCollection",
-            "-language", "pl",
+            "-language", self.lang,
             "-input", os.path.abspath(docs_dir),
             "-index", os.path.abspath(self.index_dir),
             "-threads", str(self.threads),
@@ -65,7 +65,7 @@ class LuceneIndex(SearchIndex):
 
     def _open_searcher(self):
         searcher = LuceneSearcher(self.index_dir)
-        searcher.set_language("pl")
+        searcher.set_language(self.lang)
         self.searcher = searcher
 
     def name(self):

@@ -23,6 +23,7 @@ class AutoIndex:
         elif index_type == "splade":
             return SpladeIndex(config, data_dir=cache_dir, use_bettertransformer=use_bt, threads=args.threads)
         elif index_name in ("sparse", "bm25"):
-            return LuceneIndex(cache_dir, "pl", args.threads)
+            lang = config.get("lang", "pl")
+            return LuceneIndex(cache_dir, lang, args.threads)
         else:
             return DenseIndex(data_dir=cache_dir, encoder=config, use_bettertransformer=use_bt, raw_mode=raw_mode)
