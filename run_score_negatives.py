@@ -3,10 +3,10 @@ import logging
 import os.path
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
-
+from utils.system import set_java_env
+set_java_env()
 from tqdm import tqdm
 from transformers import HfArgumentParser
-
 from data import RawJsonlTask, IndexInput
 from search import SearchIndex, AutoIndex, RerankerHybrid
 
