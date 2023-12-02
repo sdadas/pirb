@@ -80,7 +80,6 @@ class HardNegsBuilder:
         return RerankerHybrid(**conf)
 
     def build(self):
-        cache_prefix = self.task.task_id
         passages: Dict[str, str] = {val.id : val.text for val in self.task.passages(self.args.data_dir)}
         queries: List[IndexInput] = list(self.task.queries(self.args.data_dir))
         if self.args.queries_end_idx is None:
@@ -92,7 +91,7 @@ class HardNegsBuilder:
             logging.info(f"Processing index {index.name()}")
             if not index.exists():
                 index.build(self.task.passages(self.args.data_dir))
-            results = index.search(queries, self.args.max_negs_per_index, cache_prefix=cache_prefix)
+            results = index.search(queries, self.args.max_negs_per_index)
             index_results.append(results)
         self.reraker = self._create_reranker()
         output_path = os.path.join(self.args.data_dir, self.task.task_id, self.args.output_name)
