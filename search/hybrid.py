@@ -101,7 +101,10 @@ class ClassifierReranker(Reranker):
         model.eval()
         if self.use_bettertransformer:
             from optimum.bettertransformer import BetterTransformer
-            model = BetterTransformer.transform(model)
+            try:
+                model = BetterTransformer.transform(model)
+            except NotImplementedError:
+                logging.warning(f"Model {model.config.model_type} not supported in BetterTransformer")
         return model, tokenizer
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
@@ -155,7 +158,10 @@ class Seq2SeqReranker(Reranker):
         model.eval()
         if self.use_bettertransformer:
             from optimum.bettertransformer import BetterTransformer
-            model = BetterTransformer.transform(model)
+            try:
+                model = BetterTransformer.transform(model)
+            except NotImplementedError:
+                logging.warning(f"Model {model.config.model_type} not supported in BetterTransformer")
         return model, tokenizer
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
