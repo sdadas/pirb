@@ -85,7 +85,7 @@ class RetrievalEvaluator:
     def eval_task(self, task: RetrievalTask, index: SearchIndex, metadata=None):
         cache_prefix = task.task_id
         needs_rebuild = not index.exists() and not index.results_exist(self.args.recall_k, cache_prefix)
-        task.limit_queries = self.args.query_limit
+        task.set_limit_queries(self.args.query_limit)
         if self.args.overwrite or needs_rebuild:
             index.build(task.passages(self.args.data_dir))
         queries = list(task.queries(self.args.data_dir))
@@ -163,16 +163,29 @@ class RetrievalEvaluator:
             fcntl.flock(output_file, fcntl.LOCK_UN)
 
 
+def _load_models(config_path: str) -> List[Dict]:
+    if config_path.endswith("*"):
+        config_path = config_path[:-1]
+        files = sorted(os.listdir(config_path))
+        encoders = []
+        for file in files:
+            if file.lower().endswith(".json"):
+                encoders.extend(_load_models(os.path.join(config_path, file)))
+        return encoders
+    else:
+        with open(config_path, "r", encoding="utf-8") as config_file:
+            encoders: List[Dict] = json.load(config_file)
+            assert isinstance(encoders, list), "--models_config should contain a list of encoder models"
+            return encoders
+
+
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.INFO)
     logging.root.setLevel(logging.INFO)
     parser = HfArgumentParser([BenchmarkArgs])
     args = parser.parse_args_into_dataclasses()[0]
-
-    with open(args.models_config, "r", encoding="utf-8") as config_file:
-        encoders: List[Dict] = json.load(config_file)
-        assert isinstance(encoders, list), "--models_config should contain a list of encoder models"
-        logging.info("Evaluating %d models: %s", len(encoders), ", ".join([v["name"] for v in encoders]))
+    encoders = _load_models(args.models_config)
+    logging.info("Evaluating %d models: %s", len(encoders), ", ".join([v["name"] for v in encoders]))
 
     benchmark = [
         # Web crawled datasets

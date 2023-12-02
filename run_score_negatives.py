@@ -77,6 +77,8 @@ class HardNegsBuilder:
     def _create_reranker(self):
         with open(self.args.reranker, "r", encoding="utf-8") as config_file:
             conf = json.load(config_file)
+        if self.args.use_bettertransformer:
+            conf["use_bettertransformer"] = True
         return RerankerHybrid(**conf)
 
     def build(self):

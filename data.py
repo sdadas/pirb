@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -36,6 +37,9 @@ class RetrievalTask:
         max_size = {"small": 104_857_600, "tiny": 20_971_520}[scope]
         size = Path(self.passages_path(data_dir)).stat().st_size + Path(self.queries_path(data_dir)).stat().st_size
         return size <= max_size
+
+    def set_limit_queries(self, limit: int):
+        self.limit_queries = limit
 
     def task_cache_name(self):
         return self.task_id
@@ -275,6 +279,7 @@ class MAUPQATask(RetrievalTask):
     def __init__(self, subset: str):
         super().__init__(f"maupqa-{subset}", "MaupQA")
         self.subset = subset
+        self._limit_queries = None
 
     def prepare_task(self, data_dir: str):
         if self.exists(data_dir): return
@@ -316,6 +321,22 @@ class MAUPQATask(RetrievalTask):
         logging.info("Dropped %d of %d queries due to the empty relevant list", dropped, all_queries)
         passages = [val for key, val in passages.items()]
         return queries, passages
+
+    def set_limit_queries(self, limit: int):
+        self._limit_queries = limit
+
+    def queries(self, data_dir: str) -> Iterable[IndexInput]:
+        """
+        Due to non-random ordering of samples in some MAUPQA datasets we need to shuffle the data in pseudo-random
+        way before applying the query limit.
+        """
+        queries = super().queries(data_dir)
+        queries = sorted(queries, key=lambda v: hashlib.md5(v.text.encode("utf-8")).hexdigest())
+        if self._limit_queries:
+            queries = queries[:self._limit_queries]
+        for query in queries:
+            yield query
+
 
 
 class POLQATask(RetrievalTask):

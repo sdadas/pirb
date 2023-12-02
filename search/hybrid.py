@@ -83,6 +83,7 @@ class ClassifierReranker(Reranker):
         self.bf16 = kwargs.get("bf16", False)
         self.maxlen = kwargs.get("max_seq_length", 512)
         self.template = kwargs.get("template", "{query}{sep}{sep}{passage}")
+        self.use_bettertransformer = kwargs.get("use_bettertransformer", False)
         model, tokenizer = self._load_classifier()
         self.model: PreTrainedModel = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
@@ -98,6 +99,9 @@ class ClassifierReranker(Reranker):
             dtype = torch.bfloat16
         model = AutoModelForSequenceClassification.from_pretrained(self.reranker_name, torch_dtype=dtype).to(self.device)
         model.eval()
+        if self.use_bettertransformer:
+            from optimum.bettertransformer import BetterTransformer
+            model = BetterTransformer.transform(model)
         return model, tokenizer
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
@@ -122,6 +126,7 @@ class Seq2SeqReranker(Reranker):
         self.template = kwargs.get("template", "Query: {query} Document: {passage} Relevant:")
         self.yes_token = kwargs.get("yes_token", "yes")
         self.no_token = kwargs.get("no_token", "no")
+        self.use_bettertransformer = kwargs.get("use_bettertransformer", False)
         model, tokenizer = self._load_model()
         self.model = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
@@ -148,6 +153,9 @@ class Seq2SeqReranker(Reranker):
             dtype = torch.bfloat16
         model = AutoModelForSeq2SeqLM.from_pretrained(self.reranker_name, torch_dtype=dtype).to(self.device)
         model.eval()
+        if self.use_bettertransformer:
+            from optimum.bettertransformer import BetterTransformer
+            model = BetterTransformer.transform(model)
         return model, tokenizer
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
@@ -414,17 +422,22 @@ class XGBRankerHybrid(HybridStrategy):
 class HybridIndex(SearchIndex):
 
     def __init__(self, data_dir: str, hybrid_name: str, indices: List[SearchIndex], k0: int,
-                 strategy: Union[HybridStrategy, Dict], task: RetrievalTask, rerank_limit: int):
+                 strategy: Union[HybridStrategy, Dict], task: RetrievalTask, rerank_limit: int,
+                 use_bettertransformer: bool):
         self.data_dir = data_dir
         self.hybrid_name = hybrid_name
         self.indices = indices
-        self.strategy = strategy if isinstance(strategy, HybridStrategy) else self._load_strategy(strategy, rerank_limit)
+        if isinstance(strategy, HybridStrategy):
+            self.strategy = strategy
+        else:
+            self.strategy = self._load_strategy(strategy, rerank_limit, use_bettertransformer)
         self.strategy.task = task
         self.strategy.data_dir = data_dir
         self.k0 = k0
 
-    def _load_strategy(self, spec: Dict, rerank_limit: int):
+    def _load_strategy(self, spec: Dict, rerank_limit: int, use_bettertransformer: bool):
         spec["rerank_limit"] = rerank_limit
+        spec["use_bettertransformer"] = use_bettertransformer
         strategy_type = spec["type"]
         types = {"weighted": WeightedHybrid, "xbgranker": XGBRankerHybrid, "reranker": RerankerHybrid}
         cls = types[strategy_type]
