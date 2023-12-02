@@ -211,12 +211,21 @@ class RerankerHybrid(HybridStrategy):
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
         if self.reranker is None:
             self._load_reranker()
-        return self.reranker.rerank_pairs(queries, docs, proba)
+        res = []
+        for i in range(0, len(docs), self.batch_size):
+            batch_queries = queries[i:i + self.batch_size]
+            batch_docs = docs[i:i + self.batch_size]
+            res.extend(self.reranker.rerank_pairs(batch_queries, batch_docs, proba))
+        return res
 
     def rerank(self, query: str, docs: List[str], proba: bool = False):
         if self.reranker is None:
             self._load_reranker()
-        return self.reranker.rerank(query, docs, proba)
+        res = []
+        for i in range(0, len(docs), self.batch_size):
+            batch = docs[i:i + self.batch_size]
+            res.extend(self.reranker.rerank(query, batch, proba))
+        return res
 
     def _rerank_all(self, qid: str, queries: Dict, passages: Dict, index_results: List[Dict], k: int):
         docids: Set = set()
