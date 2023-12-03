@@ -8,4 +8,5 @@ ENV DEBIAN_FRONTEND="noninteractive"
 COPY requirements.txt requirements.txt
 RUN apt update  \
     && apt install -y unzip python3-pip python-setuptools sudo default-jre \
+    && pip install --upgrade pip \
     && pip install -r requirements.txt
