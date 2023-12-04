@@ -70,8 +70,11 @@ class HybridBuilder:
             results = index.search(queries, self.args.k, cache_prefix=cache_prefix)
             index_results.append(results)
         ranker = XGBRankerHybrid()
-        ranker.fit(queries, index_results)
-        hindex = HybridIndex(self.args.data_dir, self.args.output_name, self.indices, self.args.k, ranker, self.task)
+        ranker.fit(queries, index_results, valid_fraction=0)
+        hindex = HybridIndex(
+            self.args.data_dir, self.args.output_name, self.indices, self.args.k, ranker, self.task,
+            rerank_limit=None, use_bettertransformer=self.args.use_bettertransformer
+        )
         result = hindex.model_dict()
         output_path = f"config/{self.args.output_name}.json"
         with open(output_path, "w", encoding="utf-8") as output_file:

@@ -93,7 +93,7 @@ class HardNegsBuilder:
             logging.info(f"Processing index {index.name()}")
             if not index.exists():
                 index.build(self.task.passages(self.args.data_dir))
-            results = index.search(queries, self.args.max_negs_per_index)
+            results = index.search(queries, max(self.args.max_negs_per_index, 32))
             index_results.append(results)
         self.reraker = self._create_reranker()
         output_path = os.path.join(self.args.data_dir, self.task.task_id, self.args.output_name)
@@ -112,6 +112,8 @@ class HardNegsBuilder:
         for idx, result in enumerate(index_results):
             hits = result.get(query.id)
             docids = [hit.id for hit in hits if hit.id not in unique_docs]
+            if len(docids) > self.args.max_negs_per_index:
+                docids = docids[:self.args.max_negs_per_index]
             key = self.retriever_keys[idx]
             unique_docs.update(docids)
             scores = self.reraker.rerank(query.text, ids2docs(docids), proba=True) if len(docids) > 0 else []
