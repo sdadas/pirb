@@ -111,6 +111,8 @@ class HardNegsBuilder:
         out["positive_scores"] = self.reraker.rerank(query.text, ids2docs(query.relevant), proba=True)
         for idx, result in enumerate(index_results):
             hits = result.get(query.id)
+            if hits is None:
+                hits = []
             docids = [hit.id for hit in hits if hit.id not in unique_docs]
             if len(docids) > self.args.max_negs_per_index:
                 docids = docids[:self.args.max_negs_per_index]

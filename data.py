@@ -416,11 +416,11 @@ class GPTExamsTask(RetrievalTask):
 
 class LocalMSMarcoTask(RetrievalTask):
 
-    def __init__(self, source_dir: str, split="eval", chatgpt=True):
+    def __init__(self, source_dir: str, split="eval", lang="pl"):
         super().__init__("msmarco-pl", "Other")
         self.split = split
         self.source_dir = source_dir
-        self.chatgpt = chatgpt
+        self.lang = lang
 
     def prepare_task(self, data_dir: str):
         if self.exists(data_dir): return
@@ -433,14 +433,18 @@ class LocalMSMarcoTask(RetrievalTask):
         self.write_file(passages_path, passages)
 
     def _read_queries(self):
-        file_name = f"queries.{self.split}{'.chatgpt' if self.chatgpt else ''}.jsonl"
+        file_name = f"queries.{self.split}.jsonl"
         queries_path = os.path.join(self.source_dir, file_name)
         queries = {}
         with open(queries_path, "r", encoding="utf-8") as queries_file:
             for line in queries_file:
                 value = json.loads(line.strip())
                 query_id = value["id"]
-                query = {"id": query_id, "contents": value["translation"], "relevant": set()}
+                text = value["text"]
+                translation = value["translation"]
+                query = {"id": query_id, "contents": translation if self.lang == "pl" else text, "relevant": set()}
+                if self.lang != "pl":
+                    query["translation"] = translation
                 queries[query_id] = query
         triples_path = os.path.join(self.source_dir, f"qrels.{self.split}.tsv")
         with open(triples_path, "r", encoding="utf-8") as triples_file:
