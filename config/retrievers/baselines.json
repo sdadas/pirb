@@ -1,0 +1,40 @@
+[
+  {
+    "name": "bm25"
+  },
+  {
+    "name": "sdadas/polish-splade",
+    "fp16": true,
+    "type": "splade"
+  },
+  {
+    "name": "models/baseline-mnr",
+    "fp16": true,
+    "description": "Baseline polish-roberta-base-v2 model trained on Polish MSMarco using MNR objective (https://github.com/UKPLab/sentence-transformers/blob/master/examples/training/ms_marco/train_bi-encoder_mnrl.py)"
+  },
+  {
+    "name": "models/baseline-mnr-large",
+    "fp16": true,
+    "description": "Baseline polish-roberta-large-v2 model trained on Polish MSMarco using MNR objective (https://github.com/UKPLab/sentence-transformers/blob/master/examples/training/ms_marco/train_bi-encoder_mnrl.py)"
+  },
+  {
+    "name": "models/baseline-mse",
+    "fp16": true,
+    "description": "Baseline polish-roberta-base-v2 model trained on Polish MSMarco using MSE objective (https://github.com/UKPLab/sentence-transformers/blob/master/examples/training/ms_marco/train_bi-encoder_margin-mse.py)"
+  },
+  {
+    "name": "models/baseline-mse-large",
+    "fp16": true,
+    "description": "Baseline polish-roberta-large-v2 model trained on Polish MSMarco using MSE objective (https://github.com/UKPLab/sentence-transformers/blob/master/examples/training/ms_marco/train_bi-encoder_margin-mse.py)"
+  },
+  {
+    "name": "models/baseline-poleval2022-base",
+    "fp16": true,
+    "description": "Bi-encoder based on polish-roberta-base-v2 used by Marek Kozłowski in his PolEval 2022 passage retrieval solution"
+  },
+  {
+    "name": "models/baseline-poleval2022-large",
+    "fp16": true,
+    "description": "Bi-encoder based on polish-roberta-large-v2 used by Marek Kozłowski in his PolEval 2022 passage retrieval solution"
+  }
+]

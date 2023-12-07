@@ -1,0 +1,25 @@
+[
+  {
+    "name": "plt5-large-msmarco",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "clarin-knext/plt5-large-msmarco",
+      "reranker_type": "seq2seq",
+      "batch_size": 32,
+      "max_seq_length": 512,
+      "template": "Query: {query} Document: {passage} Relevant:",
+      "yes_token": "prawda",
+      "no_token": "fałsz",
+      "bf16": true
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

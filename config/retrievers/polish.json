@@ -1,0 +1,36 @@
+[
+  {
+    "name": "ipipan/silver-retriever-base-v1",
+    "fp16": true,
+    "q_prefix": "Pytanie: ",
+    "description": "Also known as ipipan/herbert-base-retrieval-v2"
+  },
+   {
+    "name": "ipipan/herbert-base-qa-v1",
+    "fp16": true,
+    "description": "Also known as ipipan/herbert-base-retrieval-v1"
+  },
+  {
+    "name": "sdadas/st-polish-paraphrase-from-mpnet",
+    "fp16": true,
+    "description": "Polish bi-encoder trained for detecting paraphrases using knowledge distillation from paraphrase-mpnet-base-v2"
+  },
+  {
+    "name": "sdadas/st-polish-paraphrase-from-distilroberta",
+    "fp16": true,
+    "description": "Polish bi-encoder trained for detecting paraphrases using knowledge distillation from paraphrase-distilroberta-base-v2"
+  },
+  {
+    "name": "radlab/polish-sts-v2",
+    "fp16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "Voicelab/sbert-base-cased-pl",
+    "fp16": true
+  },
+  {
+    "name": "Voicelab/sbert-large-cased-pl",
+    "fp16": true
+  }
+]

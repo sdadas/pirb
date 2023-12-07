@@ -1,0 +1,7 @@
+[
+  {
+    "name": "sdadas/mmlw-retrieval-roberta-base",
+    "fp16": true,
+    "q_prefix": "zapytanie: "
+  }
+]

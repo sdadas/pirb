@@ -1,0 +1,8 @@
+[
+  {
+    "name": "sdadas/mmlw-e5-base",
+    "fp16": true,
+    "q_prefix": "query: ",
+    "p_prefix": "passage: "
+  }
+]

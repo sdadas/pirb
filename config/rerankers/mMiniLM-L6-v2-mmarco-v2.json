@@ -1,0 +1,22 @@
+[
+  {
+    "name": "mMiniLM-L6-v2-mmarco-v2",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "unicamp-dl/mMiniLM-L6-v2-mmarco-v2",
+      "reranker_type": "classifier",
+      "batch_size": 32,
+      "fp16": true,
+      "template": "{query}{sep}{sep}{passage}"
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

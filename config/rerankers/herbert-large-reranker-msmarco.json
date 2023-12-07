@@ -1,0 +1,22 @@
+[
+  {
+    "name": "herbert-large-reranker-msmarco",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "clarin-knext/herbert-large-msmarco",
+      "reranker_type": "classifier",
+      "batch_size": 32,
+      "bf16": true,
+      "template": "{query}{sep}{sep}{passage}"
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

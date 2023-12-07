@@ -1,0 +1,8 @@
+[
+  {
+    "name": "sdadas/mmlw-retrieval-e5-large",
+    "fp16": true,
+    "q_prefix": "query: ",
+    "p_prefix": "passage: "
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "intfloat/multilingual-e5-large",
+    "fp16": true,
+    "q_prefix": "query: ",
+    "p_prefix": "passage: "
+  },
+  {
+    "name": "intfloat/multilingual-e5-base",
+    "fp16": true,
+    "q_prefix": "query: ",
+    "p_prefix": "passage: "
+  },
+  {
+    "name": "intfloat/multilingual-e5-small",
+    "fp16": true,
+    "q_prefix": "query: ",
+    "p_prefix": "passage: "
+  },
+  {
+    "name": "LaBSE",
+    "fp16": true
+  },
+  {
+    "name": "distiluse-base-multilingual-cased-v2",
+    "fp16": false
+  },
+  {
+    "name": "paraphrase-multilingual-MiniLM-L12-v2",
+    "fp16": true
+  },
+  {
+    "name": "paraphrase-multilingual-mpnet-base-v2",
+    "fp16": true
+  },
+  {
+    "name": "xlm-r-bert-base-nli-stsb-mean-tokens",
+    "fp16": true
+  },
+  {
+    "name": "xlm-r-distilroberta-base-paraphrase-v1",
+    "fp16": true
+  }
+]

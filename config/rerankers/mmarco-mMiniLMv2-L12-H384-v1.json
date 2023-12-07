@@ -1,0 +1,22 @@
+[
+  {
+    "name": "mmarco-mMiniLMv2-L12-H384-v1",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "nreimers/mmarco-mMiniLMv2-L12-H384-v1",
+      "reranker_type": "classifier",
+      "batch_size": 32,
+      "fp16": true,
+      "template": "{query}{sep}{sep}{passage}"
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

@@ -1,0 +1,25 @@
+[
+  {
+    "name": "mt5-base-mmarco-v2",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "unicamp-dl/mt5-base-mmarco-v2",
+      "reranker_type": "seq2seq",
+      "batch_size": 32,
+      "max_seq_length": 512,
+      "template": "Query: {query} Document: {passage} Relevant:",
+      "yes_token": "yes",
+      "no_token": "no",
+      "bf16": true
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]
