@@ -8,5 +8,6 @@ ENV DEBIAN_FRONTEND="noninteractive"
 COPY requirements.txt requirements.txt
 RUN apt update  \
     && apt install -y unzip python3-pip python-setuptools sudo default-jre \
-    && pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip3 install --upgrade pip \
+    && pip3 install -r requirements.txt \
+    && rm -f /usr/lib/libxgboost.so
