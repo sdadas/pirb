@@ -86,6 +86,9 @@ class RetrievalTask:
                 outfile.write(json.dumps(val, ensure_ascii=False))
                 outfile.write("\n")
 
+    def is_available(self, data_dir) -> bool:
+        return True
+
 
 class RawJsonlTask(RetrievalTask):
 
@@ -99,6 +102,15 @@ class RawJsonlTask(RetrievalTask):
             raise ValueError("Missing passages file %s, you should copy it manually" % (passages_path,))
         if not os.path.exists(queries_path):
             raise ValueError("Missing queries file %s, you should copy it manually" % (queries_path,))
+
+    def is_available(self, data_dir) -> bool:
+        passages_path = os.path.join(data_dir, self.task_id, "passages/passages.jsonl")
+        queries_path = os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
+        if not os.path.exists(passages_path) or not os.path.exists(queries_path):
+            logging.error(f"⚠️ Dataset {self.task_id} is not available, removing it from the evaluation ⚠️")
+            return False
+        else:
+            return True
 
 
 class MFAQTask(RetrievalTask):
@@ -469,5 +481,10 @@ class LocalMSMarcoTask(RetrievalTask):
         with open(passages_path, "r", encoding="utf-8") as input_file:
             for line in input_file:
                 value = json.loads(line.strip())
-                passages.append({"id": value["id"], "contents": value["translation"]})
+                text = value["text"]
+                translation = value["translation"]
+                passage = {"id": value["id"], "contents": translation if self.lang == "pl" else text}
+                if self.lang != "pl":
+                    passage["translation"] = translation
+                passages.append(passage)
         return passages

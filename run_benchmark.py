@@ -236,6 +236,7 @@ if __name__ == '__main__':
         GPTExamsTask()
     ]
     os.makedirs(args.data_dir, exist_ok=True)
+    benchmark = [task for task in benchmark if task.is_available(args.data_dir)]
     for task in benchmark:
         task.prepare_task(args.data_dir)
 
