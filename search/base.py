@@ -102,6 +102,9 @@ class SearchIndex(ABC):
             dump(ids, index_ids_path)
         return res
 
+    def accumulate_stats(self, stats: Dict):
+        pass
+
     def model_dict(self) -> Dict:
         raise NotImplementedError()
 

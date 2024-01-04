@@ -4,6 +4,7 @@ import os.path
 import random
 import shutil
 import tempfile
+import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from typing import List, Iterable, Dict, Optional, Tuple, Union, Set, Callable
@@ -201,6 +202,8 @@ class RerankerHybrid(HybridStrategy):
         self.rerank_limit = kwargs.get("rerank_limit", None)
         self.batch_size = kwargs.get("batch_size", 32)
         self.reranker: Optional[Reranker] = None
+        self._stats_queries = 0
+        self._stats_elapsed = 0.0
 
     def _load_reranker(self):
         reranker_type = self.args.get("reranker_type", "classifier")
@@ -274,6 +277,7 @@ class RerankerHybrid(HybridStrategy):
     def _rerank(self, qid: str, docids: List[str], queries: Dict, passages: Dict, k: int):
         query = queries[qid].text
         results = []
+        start_time = time.time()
         for i in range(0, len(docids), self.batch_size):
             batch = docids[i:i + self.batch_size]
             docs = [passages[docid].text for docid in batch]
@@ -283,7 +287,15 @@ class RerankerHybrid(HybridStrategy):
             results.extend([IndexResult(docid, float(score)) for docid, score in zip(batch, outputs)])
         results.sort(key=lambda v: -v.score)
         results = results[:k]
+        self._stats_queries += 1
+        self._stats_elapsed += (time.time() - start_time)
         return results
+
+    def accumulate_stats(self, stats: Dict):
+        q = stats.get("queries", 0)
+        t = stats.get("reranking_time", 0.0) + self._stats_elapsed
+        stats["reranking_time"] = t
+        stats["reranking_qps"] = q / t
 
     def _load_task_data(self):
         logging.info("Loading queries for reranker")
@@ -478,6 +490,10 @@ class HybridIndex(SearchIndex):
             if not index.results_exist(k, cache_prefix):
                 return False
         return True
+
+    def accumulate_stats(self, stats: Dict):
+        if isinstance(self.strategy, RerankerHybrid):
+            self.strategy.accumulate_stats(stats)
 
     def name(self):
         return f"hybrid_{self.hybrid_name}"

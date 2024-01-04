@@ -76,11 +76,11 @@ class BenchmarkArgs:
     )
 
 
-
 class RetrievalEvaluator:
 
     def __init__(self, args: BenchmarkArgs):
         self.args: BenchmarkArgs = args
+        self.stats = {}
 
     def eval_task(self, task: RetrievalTask, index: SearchIndex, metadata=None):
         cache_prefix = task.task_id
@@ -124,6 +124,8 @@ class RetrievalEvaluator:
             f"NDCG@{self.args.ndcg_k}": ndcg,
         }
         self._log_score(task, index, metrics, metadata)
+        self.stats["queries"] = self.stats.get("queries", 0) + len(queries)
+        index.accumulate_stats(self.stats)
         print(", ".join([f"{k}: {v:.4f}%" for k, v in metrics.items()]) + f" ({index.name()})")
         return ndcg
 
@@ -256,5 +258,6 @@ if __name__ == '__main__':
             ndcg_tasks += evaluator.eval_task(task, model, metadata=encoder)
             del model
             torch.cuda.empty_cache()
+        print(evaluator.stats)
+        evaluator.stats = {}
         print(f"Average NDCG@{args.ndcg_k} for {len(benchmark)} tasks: {ndcg_tasks / len(benchmark):.2f}")
-
