@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, List, Iterable, Tuple
@@ -88,6 +89,19 @@ class RetrievalTask:
 
     def is_available(self, data_dir) -> bool:
         return True
+
+    def compute_stats(self, data_dir: str):
+        wpq = self._avg_words(self.queries(data_dir))
+        wpd = self._avg_words(self.passages(data_dir, verbose=False))
+        print(f"{self.task_id.ljust(25)} Q: {wpq:.1f}    P: {wpd:.1f}")
+
+    def _avg_words(self, rows: Iterable[IndexInput]):
+        words_count, num_rows = 0, 0
+        for row in rows:
+            words = re.split(r"[\W\d_]+", row.text, flags=re.MULTILINE)
+            words_count += len(words)
+            num_rows += 1
+        return words_count / num_rows
 
 
 class RawJsonlTask(RetrievalTask):
