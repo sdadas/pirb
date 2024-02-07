@@ -137,8 +137,9 @@ class MFAQTask(RetrievalTask):
 
 class BEIRTask(RetrievalTask):
 
-    def __init__(self, task_id: str, skip_self: bool = False, splits=("test",)):
-        super().__init__(task_id, "BEIR-PL", skip_self)
+    def __init__(self, task_id: str, skip_self: bool = False, lang="pl", splits=("test",)):
+        super().__init__(task_id, f"BEIR-{lang.upper()}", skip_self)
+        self.lang = lang
         self.splits: Iterable[str] = splits
 
     def prepare_task(self, data_dir: str):
@@ -146,7 +147,8 @@ class BEIRTask(RetrievalTask):
         passages_path = self.passages_path(data_dir)
         queries_path = self.queries_path(data_dir)
         logging.info("Preparing task %s", self.task_id)
-        dataset_name = f"clarin-knext/{self.task_id}"
+        user_name = "clarin-knext" if self.lang == "pl" else "BeIR"
+        dataset_name = f"{user_name}/{self.task_id}"
         self._write_passages(dataset_name, passages_path)
         self._write_queries(dataset_name, queries_path)
 
