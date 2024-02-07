@@ -153,7 +153,7 @@ class PermutationNegsBuilder(HardNegsBuilder):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
     def create_reranker(self):
-        model_name = self.args.reranker.removeprefix("prp:")
+        model_name = self.args.reranker[4:]
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name, torch_dtype=torch.bfloat16).to(self.device)
         self.model.eval()
