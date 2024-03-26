@@ -245,8 +245,13 @@ if __name__ == '__main__':
     if args.scope in ("small", "tiny"):
         benchmark = [task for task in benchmark if task.is_small(args.data_dir, args.scope)]
     elif args.scope != "full":
-        filer_ds = {args.scope.lower()} if "," not in args.scope else set([val.strip().lower() for val in args.scope.split(",")])
-        benchmark = [task for task in benchmark if task.task_id.lower() in filer_ds]
+        filter_ds = {args.scope.lower()} if "," not in args.scope else set([val.strip().lower() for val in args.scope.split(",")])
+        benchmark = [task for task in benchmark if task.task_id.lower() in filter_ds]
+        filter_ds.difference([task.task_id.lower() for task in benchmark])
+        # Add custom tasks
+        if len(filter_ds) > 0:
+            for task_name in filter_ds:
+                benchmark.append(RawJsonlTask(task_name))
 
     logging.info("Running evaluation on %d datasets", len(benchmark))
     evaluator = RetrievalEvaluator(args)
