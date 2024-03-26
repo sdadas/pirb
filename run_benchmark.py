@@ -247,7 +247,7 @@ if __name__ == '__main__':
     elif args.scope != "full":
         filter_ds = {args.scope.lower()} if "," not in args.scope else set([val.strip().lower() for val in args.scope.split(",")])
         benchmark = [task for task in benchmark if task.task_id.lower() in filter_ds]
-        filter_ds.difference([task.task_id.lower() for task in benchmark])
+        filter_ds = filter_ds.difference([task.task_id.lower() for task in benchmark])
         # Add custom tasks
         if len(filter_ds) > 0:
             for task_name in filter_ds:
