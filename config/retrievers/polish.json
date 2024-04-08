@@ -5,7 +5,12 @@
     "q_prefix": "Pytanie: ",
     "description": "Also known as ipipan/herbert-base-retrieval-v2"
   },
-   {
+  {
+    "name": "ipipan/silver-retriever-base-v1.1",
+    "fp16": true,
+    "q_prefix": "Pytanie: "
+  },
+  {
     "name": "ipipan/herbert-base-qa-v1",
     "fp16": true,
     "description": "Also known as ipipan/herbert-base-retrieval-v1"
