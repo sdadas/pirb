@@ -490,3 +490,26 @@ class LocalMSMarcoTask(RetrievalTask):
                     passage["translation"] = translation
                 passages.append(passage)
         return passages
+
+
+class Benchmark:
+
+    @staticmethod
+    def from_config(config_path: str) -> List[RetrievalTask]:
+        with open(config_path, "r", encoding="utf-8") as input_file:
+            config = json.load(input_file)
+        assert isinstance(config, list), "Benchmark config should include a list of task definitions"
+        cls_map = {
+            "raw": RawJsonlTask, "maupqa": MAUPQATask, "poleval": PolEvalTask, "beir": BEIRTask,
+            "mfaq": MFAQTask, "gpt-exams": GPTExamsTask, "polqa": POLQATask
+        }
+        tasks = []
+        for task_config in config:
+            task_type = task_config.get("type", "raw")
+            assert task_type in cls_map.keys(), f"'type' attribute incorrect: {task_type}"
+            cls = cls_map[task_type]
+            if "type" in task_config:
+                del task_config["type"]
+            task = cls(**task_config)
+            tasks.append(task)
+        return tasks

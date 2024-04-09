@@ -1,6 +1,7 @@
 import json
 import logging
 import os.path
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Any, Dict
@@ -11,7 +12,7 @@ from transformers import HfArgumentParser
 from utils.system import set_java_env
 set_java_env()
 
-from data import RawJsonlTask, MFAQTask, RetrievalTask, BEIRTask, PolEvalTask, MAUPQATask, GPTExamsTask
+from data import RawJsonlTask, MFAQTask, RetrievalTask, BEIRTask, PolEvalTask, MAUPQATask, GPTExamsTask, Benchmark
 from search import SearchIndex, AutoIndex
 
 # patch fcntl on Windows
@@ -29,6 +30,10 @@ except ImportError:
 class BenchmarkArgs:
     models_config: str = field(
         metadata={"help": "Path to models config file"},
+    )
+    benchmark_config: str = field(
+        default="config/benchmarks/pirb.json",
+        metadata={"help": "Path to the benchmark config file"},
     )
     ndcg_k: int = field(
         default=10,
@@ -90,7 +95,8 @@ class RetrievalEvaluator:
             index.build(task.passages(self.args.data_dir))
         queries = list(task.queries(self.args.data_dir))
         results = index.search(queries, self.args.recall_k, cache_prefix=cache_prefix, overwrite=self.args.overwrite)
-        num_correct, mrr_sum, total = 0, 0.0, 0
+        mrr_sum, total = 0.0, 0
+        acc_correct = Counter()
         ndcg_sum = 0.0
         recall_sum = 0.0
         for query in tqdm(queries, desc="Computing evaluation metrics"):
@@ -108,17 +114,18 @@ class RetrievalEvaluator:
                 if docid in relevant_set:
                     found_idx = idx
                     break
-            num_correct += 1 if found_idx == 0 else 0
+            for i in range(5):
+                acc_correct[i] += 1 if i >= found_idx >= 0 else 0
             mrr_sum += (1 / (found_idx + 1)) if found_idx >= 0 else 0
             y_true, y_pred = self._get_doc_rankings(hits, query.relevant, query.relevant_scores, self.args.ndcg_k)
             ndcg_sum += ndcg_score([y_true], [y_pred], k=self.args.ndcg_k)
             recall_sum += self._recall(hits, query.relevant)
-        acc = 100 * num_correct / total
         ndcg = (ndcg_sum / total) * 100.0
         recall = (recall_sum / total) * 100.0
         mrr = 100 * mrr_sum / total
         metrics = {
-            "Accuracy@1": acc,
+            "Accuracy@1": 100 * acc_correct[0] / total,
+            "Accuracy@1-5": [100 * acc_correct[i] / total for i in range(5)],
             f"Recall@{self.args.recall_k}": recall,
             f"MRR@{self.args.ndcg_k}": mrr,
             f"NDCG@{self.args.ndcg_k}": ndcg,
@@ -126,7 +133,7 @@ class RetrievalEvaluator:
         self._log_score(task, index, metrics, metadata)
         self.stats["queries"] = self.stats.get("queries", 0) + len(queries)
         index.accumulate_stats(self.stats)
-        print(", ".join([f"{k}: {v:.4f}%" for k, v in metrics.items()]) + f" ({index.name()})")
+        print(", ".join([f"{k}: {v:.4f}%" for k, v in metrics.items() if not isinstance(v, list)]) + f" ({index.name()})")
         return ndcg
 
     def _get_doc_rankings(self, hits: List[Any], relevant: List[str], relevant_scores: List, k: int):
@@ -189,54 +196,7 @@ if __name__ == '__main__':
     encoders = _load_models(args.models_config)
     logging.info("Evaluating %d models: %s", len(encoders), ", ".join([v["name"] for v in encoders]))
 
-    benchmark = [
-        # Web crawled datasets
-        RawJsonlTask("gemini"),
-        RawJsonlTask("odi"),
-        RawJsonlTask("onet"),
-        RawJsonlTask("zapytajfizyka"),
-        RawJsonlTask("techpedia"),
-        RawJsonlTask("pwn"),
-        RawJsonlTask("eprawnik"),
-        RawJsonlTask("specprawnik"),
-        RawJsonlTask("abczdrowie"),
-        # MAUPQA datasets
-        MAUPQATask("1z10"),
-        MAUPQATask("czy-wiesz-v2"),
-        MAUPQATask("gpt3-cc"),
-        MAUPQATask("gpt3.5-cc"),
-        MAUPQATask("gpt3.5-wiki"),
-        MAUPQATask("mkqa"),
-        MAUPQATask("mqa"),
-        MAUPQATask("multilingual-NLI"),
-        MAUPQATask("poleval2021-pairs"),
-        MAUPQATask("poquad"),
-        MAUPQATask("templates"),
-        MAUPQATask("wiki-def"),
-        # PolEval-2022
-        PolEvalTask("dev-0", "wiki-trivia"),
-        PolEvalTask("test-A", "wiki-trivia"),
-        PolEvalTask("test-A", "legal-questions"),
-        PolEvalTask("test-A", "allegro-faq"),
-        PolEvalTask("test-B", "wiki-trivia"),
-        PolEvalTask("test-B", "legal-questions"),
-        PolEvalTask("test-B", "allegro-faq"),
-        # BEIR-PL datasets
-        BEIRTask("arguana-pl", skip_self=True),
-        BEIRTask("dbpedia-pl"),
-        BEIRTask("fiqa-pl"),
-        BEIRTask("hotpotqa-pl"),
-        BEIRTask("msmarco-pl", splits=("validation",)),
-        BEIRTask("nfcorpus-pl"),
-        BEIRTask("nq-pl"),
-        BEIRTask("quora-pl", skip_self=True),
-        BEIRTask("scidocs-pl"),
-        BEIRTask("scifact-pl"),
-        BEIRTask("trec-covid-pl"),
-        # Other datasets
-        MFAQTask(),
-        GPTExamsTask()
-    ]
+    benchmark = Benchmark.from_config(args.benchmark_config)
     os.makedirs(args.data_dir, exist_ok=True)
     benchmark = [task for task in benchmark if task.is_available(args.data_dir)]
     for task in benchmark:
