@@ -194,6 +194,37 @@ class Seq2SeqReranker(Reranker):
         return self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
 
 
+class FlagReranker(Reranker):
+
+    def __init__(self, **kwargs):
+        self.reranker_name = kwargs["reranker_name"]
+        self.use_fp16 = kwargs.get("fp16", False)
+        self.use_bf16 = kwargs.get("bf16", False)
+        self.reranker_type = kwargs["reranker_type"]
+        self.cutoff_layers = kwargs.get("cutoff_layers", 28)
+        assert self.reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm")
+        self.model = self._load_model()
+
+    def _load_model(self):
+        from FlagEmbedding import FlagReranker, FlagLLMReranker, LayerWiseFlagLLMReranker
+        if self.reranker_type == "flag_classifier":
+            model = FlagReranker(self.reranker_name, use_fp16=self.use_fp16 or self.use_bf16)
+        elif self.reranker_type == "flag_llm":
+            model = FlagLLMReranker(self.reranker_name, use_fp16=self.use_fp16, use_bf16=self.use_bf16)
+        elif self.reranker_type == "flag_layerwise_llm":
+            model = LayerWiseFlagLLMReranker(self.reranker_name, use_fp16=self.use_fp16, use_bf16=self.use_bf16)
+        else:
+            raise ValueError(f"Unknown reranker type {self.reranker_type}")
+        return model
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        pairs = list(zip(queries, docs))
+        args = {"normalize": proba}
+        if self.reranker_type == "flag_layerwise_llm":
+            args["cutoff_layers"] = self.cutoff_layers
+        return self.model.compute_score(pairs, **args)
+
+
 class RerankerHybrid(HybridStrategy):
 
     def __init__(self, **kwargs):
@@ -208,12 +239,14 @@ class RerankerHybrid(HybridStrategy):
     def _load_reranker(self):
         reranker_type = self.args.get("reranker_type", "classifier")
         reranker_name = self.args['reranker_name']
-        assert reranker_type in ("classifier", "seq2seq")
+        assert reranker_type in ("classifier", "seq2seq", "flag_classifier", "flag_llm", "flag_layerwise_llm")
         logging.info(f"Loading {reranker_type} reranker {reranker_name}")
         if reranker_type == "classifier":
             self.reranker = ClassifierReranker(**self.args)
         elif reranker_type == "seq2seq":
             self.reranker = Seq2SeqReranker(**self.args)
+        elif reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm"):
+            self.reranker = FlagReranker(**self.args)
 
     def merge_results(self, index_results: List[Dict], k: int) -> Dict:
         if self.reranker is None:

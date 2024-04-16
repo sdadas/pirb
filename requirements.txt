@@ -9,3 +9,4 @@ scikit-learn>=1.2.1
 pyserini
 faiss-cpu
 xgboost>=2.0.1
+FlagEmbedding

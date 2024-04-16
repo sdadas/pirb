@@ -1,0 +1,21 @@
+[
+  {
+    "name": "BAAI/bge-reranker-v2-gemma",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "BAAI/bge-reranker-v2-gemma",
+      "reranker_type": "flag_llm",
+      "batch_size": 32,
+      "fp16": true
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

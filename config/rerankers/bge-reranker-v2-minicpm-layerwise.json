@@ -1,0 +1,22 @@
+[
+  {
+    "name": "BAAI/bge-reranker-v2-minicpm-layerwise",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "BAAI/bge-reranker-v2-minicpm-layerwise",
+      "reranker_type": "flag_layerwise_llm",
+      "batch_size": 32,
+      "fp16": true,
+      "cutoff_layers": 28
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]
