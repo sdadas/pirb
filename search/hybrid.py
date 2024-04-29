@@ -265,7 +265,10 @@ class RerankerHybrid(HybridStrategy):
         for i in range(0, len(docs), self.batch_size):
             batch_queries = queries[i:i + self.batch_size]
             batch_docs = docs[i:i + self.batch_size]
-            res.extend(self.reranker.rerank_pairs(batch_queries, batch_docs, proba))
+            pred = self.reranker.rerank_pairs(batch_queries, batch_docs, proba)
+            if isinstance(pred, float):
+                pred = [pred]
+            res.extend(pred)
         return res
 
     def rerank(self, query: str, docs: List[str], proba: bool = False):
@@ -274,7 +277,10 @@ class RerankerHybrid(HybridStrategy):
         res = []
         for i in range(0, len(docs), self.batch_size):
             batch = docs[i:i + self.batch_size]
-            res.extend(self.reranker.rerank(query, batch, proba))
+            pred = self.reranker.rerank(query, batch, proba)
+            if isinstance(pred, float):
+                pred = [pred]
+            res.extend(pred)
         return res
 
     def _rerank_all(self, qid: str, queries: Dict, passages: Dict, index_results: List[Dict], k: int):
