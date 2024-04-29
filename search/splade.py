@@ -23,6 +23,7 @@ class SpladeEncoder(QueryEncoder):
         self.config = config
         self.use_bettertransformer = use_bettertransformer
         self.model_name_or_path = config["name"]
+        self.maxlen = config.get("max_seq_length", 512)
         self.tokenizer, self.model = self._init_tokenizer_and_model()
         self.vocab = {v: k for k, v in self.tokenizer.get_vocab().items()}
         self.queries_cache = {}
@@ -30,8 +31,7 @@ class SpladeEncoder(QueryEncoder):
     def _init_tokenizer_and_model(self):
         tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path)
         model = AutoModelForMaskedLM.from_pretrained(self.model_name_or_path).to(self.device)
-        model_max_length = tokenizer.max_model_input_sizes.get(model.config.model_type, 512)
-        tokenizer.model_max_length = model_max_length
+        tokenizer.model_max_length = self.maxlen
         if self.use_bettertransformer:
             from optimum.bettertransformer import BetterTransformer
             model = BetterTransformer.transform(model)
