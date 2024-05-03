@@ -17,7 +17,7 @@ from search.base import SearchIndex, patch_sentence_transformer
 class DenseIndex(SearchIndex):
 
     def __init__(self, data_dir: str, encoder: Dict, normalize=True, use_bettertransformer=False, raw_mode=True):
-        self._st_bs = 32
+        self._st_bs = encoder.get("batch_size", 32)
         self.data_dir = data_dir
         self.index_name = encoder["name"].replace("/", "_").replace(".", "_")
         self.index_dir = os.path.join(self.data_dir, self.index_name)
@@ -42,7 +42,8 @@ class DenseIndex(SearchIndex):
             patched = patch_sentence_transformer(model)
             if patched:
                 logging.info("Using encoder with BetterTransformer enabled")
-                self._st_bs = 256
+                if "batch_size" not in self.encoder_spec:
+                    self._st_bs = 256
         model.eval()
         if self.encoder_spec.get("fp16", False):
             model.half()

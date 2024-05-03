@@ -14,6 +14,13 @@ class AutoIndex:
         index_type = config.get("type", None)
         use_bt = args.use_bettertransformer if hasattr(args, "use_bettertransformer") else False
         raw_mode = args.raw_mode if hasattr(args, "raw_mode") else True
+        tasks_config = config.get("tasks", None)
+        if tasks_config is not None and isinstance(tasks_config, dict):
+            task_overrides = tasks_config.get(task.task_id, None)
+            if task_overrides is not None and isinstance(task_overrides, dict):
+                config = dict(config)
+                for key, val in task_overrides.items():
+                    config[key] = val
         if index_type == "hybrid":
             child_configs = config["models"]
             indices = [AutoIndex.from_config(child_config, task, args) for child_config in child_configs]
