@@ -26,7 +26,7 @@ class HybridStrategy(ABC):
         self.data_dir: Optional[str] = None
 
     @abstractmethod
-    def merge_results(self, index_results: List[Dict], k: int) -> Dict:
+    def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         raise NotImplementedError()
 
     @abstractmethod
@@ -54,7 +54,7 @@ class WeightedHybrid(HybridStrategy):
         self.weights = kwargs["weights"]
         assert isinstance(self.weights, list)
 
-    def merge_results(self, index_results: List[Dict], k: int) -> Dict:
+    def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         qids = set()
         for index in index_results:
             qids.update(index.keys())
@@ -248,11 +248,12 @@ class RerankerHybrid(HybridStrategy):
         elif reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm"):
             self.reranker = FlagReranker(**self.args)
 
-    def merge_results(self, index_results: List[Dict], k: int) -> Dict:
+    def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         if self.reranker is None:
             self._load_reranker()
         results = {}
-        queries, passages = self._load_task_data()
+        passages = self._load_task_data()
+        queries = {query.id: query for query in queries}
         for qid in tqdm(queries.keys(), desc="Reranking results"):
             rerank_func: Callable = self._rerank_limited if self.rerank_limit else self._rerank_all
             results[qid] = rerank_func(qid, queries, passages, index_results, k)
@@ -337,11 +338,8 @@ class RerankerHybrid(HybridStrategy):
         stats["reranking_qps"] = q / t
 
     def _load_task_data(self):
-        logging.info("Loading queries for reranker")
-        queries = {val.id: val for val in self.task.queries(self.data_dir)}
         logging.info("Loading passages for reranker")
-        passages = {val.id: val for val in self.task.passages(self.data_dir)}
-        return queries, passages
+        return {val.id: val for val in self.task.passages(self.data_dir)}
 
     def needs_cache(self) -> bool:
         return False
@@ -456,7 +454,7 @@ class XGBRankerHybrid(HybridStrategy):
                 shutil.rmtree(temp_dir)
         return self.serialized_model
 
-    def merge_results(self, index_results: List[Dict], k: int) -> Dict:
+    def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         assert self.model is not None, "model is null"
         qids = set()
         for index in index_results:
@@ -519,7 +517,7 @@ class HybridIndex(SearchIndex):
                 queries, self.k0, batch_size, verbose=verbose, cache_prefix=cache_prefix, overwrite=overwrite
             )
             index_results.append(results)
-        results = self.strategy.merge_results(index_results, k)
+        results = self.strategy.merge_results(queries, index_results, k)
         if self.strategy.needs_cache():
             self.save_results_to_cache(k, cache_prefix, results)
         return results
