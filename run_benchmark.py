@@ -12,7 +12,7 @@ from transformers import HfArgumentParser
 from utils.system import set_java_env
 set_java_env()
 
-from data import RawJsonlTask, MFAQTask, RetrievalTask, BEIRTask, PolEvalTask, MAUPQATask, GPTExamsTask, Benchmark
+from data import RawJsonlTask, RetrievalTask, Benchmark, IndexResult
 from search import SearchIndex, AutoIndex
 
 # patch fcntl on Windows
@@ -93,6 +93,7 @@ class RetrievalEvaluator:
         task.set_limit_queries(self.args.query_limit)
         if self.args.overwrite or needs_rebuild:
             index.build(task.passages(self.args.data_dir))
+        chunk_doc_mapping = task.get_chunk_document_mapping(self.args.data_dir)
         queries = list(task.queries(self.args.data_dir))
         results = index.search(queries, self.args.recall_k, cache_prefix=cache_prefix, overwrite=self.args.overwrite)
         mrr_sum, total = 0.0, 0
@@ -102,6 +103,7 @@ class RetrievalEvaluator:
         for query in tqdm(queries, desc="Computing evaluation metrics"):
             hits = results.get(query.id)
             if hits is None: hits = []
+            hits = self._map_chunks_to_docs(hits, chunk_doc_mapping)
             if task.skip_self:
                 hits = [hit for hit in hits if hit.id != query.id]
             docids = [hit.id for hit in hits]
@@ -135,6 +137,18 @@ class RetrievalEvaluator:
         index.accumulate_stats(self.stats)
         print(", ".join([f"{k}: {v:.4f}%" for k, v in metrics.items() if not isinstance(v, list)]) + f" ({index.name()})")
         return ndcg
+
+    def _map_chunks_to_docs(self, hits: List[IndexResult], mapping: Dict):
+        if mapping is None:
+            return hits
+        doc_ids = set()
+        results = []
+        for hit in hits:
+            doc_id = mapping.get(hit.id, hit.id)
+            if doc_id not in doc_ids:
+                results.append(IndexResult(doc_id, hit.score))
+                doc_ids.add(doc_id)
+        return results
 
     def _get_doc_rankings(self, hits: List[Any], relevant: List[str], relevant_scores: List, k: int):
         if len(hits) > k:

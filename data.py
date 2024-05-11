@@ -17,6 +17,7 @@ class IndexInput:
     text: str
     relevant: Optional[List] = None
     relevant_scores: Optional[List] = None
+    parent_id: Optional[str] = None
 
 
 @dataclass
@@ -48,18 +49,32 @@ class RetrievalTask:
     def prepare_task(self, data_dir: str):
         raise NotImplementedError()
 
+    def full_documents_path(self, data_dir: str):
+        return os.path.join(data_dir, self.task_id, "documents/documents.jsonl")
+
     def passages_path(self, data_dir: str):
         return os.path.join(data_dir, self.task_id, "passages/passages.jsonl")
 
     def queries_path(self, data_dir: str):
         return os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
 
+    def get_chunk_document_mapping(self, data_dir: str):
+        if not os.path.exists(self.full_documents_path(data_dir)):
+            return None
+        logging.info("Getting chunk document mapping")
+        res = {}
+        for passage in self.passages(data_dir, verbose=False):
+            if passage.parent_id:
+                res[passage.id] = passage.parent_id
+        return res
+
     def passages(self, data_dir: str, verbose: bool = True) -> Iterable[IndexInput]:
         input_path = self.passages_path(data_dir)
         with open(input_path, "r", encoding="utf-8") as input_file:
             for line in tqdm(input_file, desc="Reading passages", disable=not verbose):
                 value = json.loads(line.strip())
-                yield IndexInput(value["id"], value[RetrievalTask.TEXT_FIELD])
+                parent_id = value.get("parentId", None)
+                yield IndexInput(value["id"], value[RetrievalTask.TEXT_FIELD], parent_id=parent_id)
 
     def queries(self, data_dir: str) -> Iterable[IndexInput]:
         input_path = self.queries_path(data_dir)
