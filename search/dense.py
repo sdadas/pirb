@@ -1,25 +1,76 @@
 import logging
-import logging
 import math
 import os.path
 from collections import defaultdict
-from typing import List, Iterable, Dict, Optional
+from typing import List, Iterable, Dict, Optional, Union
 import faiss
+import numpy as np
 import torch
 from joblib import load
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import semantic_search
 from tqdm import tqdm
+from transformers import PreTrainedTokenizer
+
 from data import IndexInput, IndexResult
 from search.base import SearchIndex, patch_sentence_transformer
+
+
+class TextAveragingEncoder:
+
+    def __init__(self, encoder: SentenceTransformer):
+        self.encoder = encoder
+        self.tokenizer: PreTrainedTokenizer = self.encoder.tokenizer
+        self.max_len = self.encoder.max_seq_length
+        logging.info("Using text averaging encoder")
+
+    def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
+        if isinstance(batch, str):
+            batch = [batch]
+        chunked_inputs, doc_pos = self._chunk_inputs(batch)
+        embeddings = self.encoder.encode(chunked_inputs, convert_to_tensor=convert_to_tensor, **kwargs)
+        return self._build_embeddings(embeddings, len(chunked_inputs), doc_pos, convert_to_tensor)
+
+    def _chunk_inputs(self, batch: List[str]):
+        encodings = self.tokenizer(batch, add_special_tokens=False, padding=False, truncation=False)
+        chunked_inputs = []
+        doc_pos = []
+        for encoding in encodings.encodings:
+            seq = encoding.ids
+            doc_pos.append(len(chunked_inputs))
+            for i in range(0, len(seq), self.max_len):
+                chunk_seq = seq[i:i + self.max_len]
+                chunked_inputs.append(self.tokenizer.decode(chunk_seq))
+        return chunked_inputs, doc_pos
+
+    def _build_embeddings(self, embeddings, size: int, doc_pos: List[int], convert_to_tensor: bool):
+        res = []
+        for idx in range(len(doc_pos)):
+            start_pos = doc_pos[idx]
+            end_pos = doc_pos[idx + 1] if idx < len(doc_pos) - 1 else size
+            doc_emb = embeddings[start_pos:end_pos, :]
+            if convert_to_tensor:
+                doc_emb = doc_emb.detach().cpu()
+                doc_res = torch.mean(doc_emb, dim=0, dtype=torch.float32)
+                doc_res = torch.nn.functional.normalize(doc_res, p=2, dim=0)
+            else:
+                doc_res = np.mean(doc_emb, axis=0)
+                norm = np.linalg.norm(doc_res)
+                if norm != 0:
+                    doc_res = doc_res / norm
+            res.append(doc_res)
+        return torch.vstack(res) if convert_to_tensor else np.vstack(res)
 
 
 class DenseIndex(SearchIndex):
 
     def __init__(self, data_dir: str, encoder: Dict, normalize=True, use_bettertransformer=False, raw_mode=True):
         self._st_bs = encoder.get("batch_size", 32)
+        self._averaging = encoder.get("enable_averaging", False)
         self.data_dir = data_dir
         self.index_name = encoder["name"].replace("/", "_").replace(".", "_")
+        if self._averaging:
+            self.index_name += "_averaging"
         self.index_dir = os.path.join(self.data_dir, self.index_name)
         self.index_vectors_path = os.path.join(self.index_dir, "index.bin")
         self.index_ids_path = os.path.join(self.index_dir, "ids.bin")
@@ -47,6 +98,8 @@ class DenseIndex(SearchIndex):
         model.eval()
         if self.encoder_spec.get("fp16", False):
             model.half()
+        if self._averaging:
+            model = TextAveragingEncoder(model)
         self.encoder = model
 
     def exists(self) -> bool:
@@ -58,7 +111,7 @@ class DenseIndex(SearchIndex):
         ids, texts = [], []
         for doc in docs:
             ids.append(doc.id)
-            texts.append(doc.text if not self.passage_prefix else self.passage_prefix + doc.text)
+            texts.append(doc.text)
         logging.info("Building dense index %s", self.index_dir)
         os.makedirs(self.index_dir, exist_ok=True)
         embeddings = []
@@ -70,7 +123,8 @@ class DenseIndex(SearchIndex):
                 logging.info(f"Encoding data part {idx} of {parts_num}")
             batch = texts[i:i + mega_batch_size]
             batch_emb = self.encoder.encode(
-                batch, normalize_embeddings=self.normalize, convert_to_tensor=self.raw_mode, batch_size=self._st_bs
+                batch, normalize_embeddings=self.normalize, convert_to_tensor=self.raw_mode,
+                batch_size=self._st_bs, prompt=self.passage_prefix
             )
             idx += 1
             if self.raw_mode:
@@ -96,11 +150,11 @@ class DenseIndex(SearchIndex):
         return results
 
     def _search_vectors(self, batch: List[IndexInput], top_k: int) -> Dict:
-        texts = [(val.text if not self.query_prefix else self.query_prefix + val.text) for val in batch]
+        texts = [val.text for val in batch]
         qids = [val.id for val in batch]
         emb = self.encoder.encode(
             texts, show_progress_bar=False, normalize_embeddings=self.normalize,
-            batch_size=self._st_bs, convert_to_tensor=self.raw_mode
+            batch_size=self._st_bs, convert_to_tensor=self.raw_mode, prompt=self.query_prefix
         )
         return self._search_in_memory(emb, qids, top_k) if self.raw_mode else self._search_in_faiss(emb, qids, top_k)
 
