@@ -96,7 +96,9 @@ class DenseIndex(SearchIndex):
                 if "batch_size" not in self.encoder_spec:
                     self._st_bs = 256
         model.eval()
-        if self.encoder_spec.get("fp16", False):
+        if self.encoder_spec.get("bf16", False):
+            model.bfloat16()
+        elif self.encoder_spec.get("fp16", False):
             model.half()
         if self._averaging:
             model = TextAveragingEncoder(model)

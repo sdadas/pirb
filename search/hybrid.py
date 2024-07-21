@@ -225,6 +225,34 @@ class FlagReranker(Reranker):
         return self.model.compute_score(pairs, **args)
 
 
+class JinaReranker(Reranker):
+
+    def __init__(self, **kwargs):
+        self.reranker_name = kwargs["reranker_name"]
+        self.use_bf16 = kwargs.get("bf16", False)
+        self.use_fp16 = kwargs.get("fp16", False)
+        self.batch_size = kwargs.get("batch_size", 32)
+        self.max_length = kwargs.get("max_seq_length", 1024)
+        self.model = self._load_model()
+
+    def _load_model(self):
+        dtype = "auto"
+        if self.use_bf16: dtype = torch.bfloat16
+        elif self.use_fp16: dtype = torch.float16
+        model = AutoModelForSequenceClassification.from_pretrained(
+            self.reranker_name,
+            torch_dtype=dtype,
+            trust_remote_code=True,
+        )
+        model.to("cuda")
+        model.eval()
+        return model
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        pairs = list(zip(queries, docs))
+        return self.model.compute_score(pairs, batch_size=self.batch_size, max_length=self.max_length)
+
+
 class RerankerHybrid(HybridStrategy):
 
     def __init__(self, **kwargs):
@@ -239,7 +267,7 @@ class RerankerHybrid(HybridStrategy):
     def _load_reranker(self):
         reranker_type = self.args.get("reranker_type", "classifier")
         reranker_name = self.args['reranker_name']
-        assert reranker_type in ("classifier", "seq2seq", "flag_classifier", "flag_llm", "flag_layerwise_llm")
+        assert reranker_type in ("classifier", "seq2seq", "flag_classifier", "flag_llm", "flag_layerwise_llm", "jina")
         logging.info(f"Loading {reranker_type} reranker {reranker_name}")
         if reranker_type == "classifier":
             self.reranker = ClassifierReranker(**self.args)
@@ -247,6 +275,8 @@ class RerankerHybrid(HybridStrategy):
             self.reranker = Seq2SeqReranker(**self.args)
         elif reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm"):
             self.reranker = FlagReranker(**self.args)
+        elif reranker_type == "jina":
+            self.reranker = JinaReranker(**self.args)
 
     def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         if self.reranker is None:
