@@ -11,7 +11,6 @@ from typing import List, Iterable, Dict, Optional, Tuple, Union, Set, Callable
 import numpy as np
 from scipy.special import expit
 import torch
-import xgboost as xgb
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, PreTrainedTokenizer, PreTrainedModel, \
     AutoModelForSeq2SeqLM
@@ -386,6 +385,7 @@ class XGBRankerHybrid(HybridStrategy):
         self.model = self._load_model() if self.serialized_model else None
 
     def _load_model(self):
+        import xgboost as xgb
         temp_dir = tempfile.mkdtemp()
         try:
             temp_path = os.path.join(temp_dir, "model.json")
@@ -446,6 +446,7 @@ class XGBRankerHybrid(HybridStrategy):
         return np.array(point)
 
     def _train_model(self, X_train, y_train, groups):
+        import xgboost as xgb
         model = xgb.XGBRanker(
             tree_method="hist",
             device="cuda",
@@ -462,7 +463,7 @@ class XGBRankerHybrid(HybridStrategy):
         model.fit(X_train, y_train, group=groups, verbose=True)
         return model
 
-    def _validate_model(self, model: xgb.XGBRanker, grouped: List[Tuple]):
+    def _validate_model(self, model, grouped: List[Tuple]):
         num_correct = 0
         for idx, group in enumerate(grouped):
             x, y, _ = group
