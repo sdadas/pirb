@@ -1,0 +1,7 @@
+[
+  {
+    "name": "BAAI/bge-multilingual-gemma2",
+    "fp16": true,
+    "q_prefix": "<instruct>Given a web search query, retrieve relevant passages that answer the query.\n<query>"
+  }
+]
