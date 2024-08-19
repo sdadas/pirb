@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:24.03-py3
+FROM nvcr.io/nvidia/pytorch:24.07-py3
 
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
@@ -11,3 +11,11 @@ RUN apt update  \
     && pip install --upgrade pip \
     && pip install -r requirements.txt \
     && rm -f /usr/lib/libxgboost.so
+
+# Install FlagEmbedding
+RUN mkdir /tmp/stage && \
+    git clone https://github.com/FlagOpen/FlagEmbedding.git /tmp/stage/FlagEmbedding && \
+    cd /tmp/stage/FlagEmbedding && \
+    pip install . && \
+    cd - && \
+    rm -rf /tmp/stage

@@ -10,4 +10,3 @@ pyserini
 faiss-cpu
 xgboost
 pytrec-eval
-FlagEmbedding
