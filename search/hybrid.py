@@ -204,7 +204,7 @@ class FlagReranker(Reranker):
         self.compress_ratio = kwargs.get("compress_ratio", None)
         self.compress_layers = kwargs.get("compress_layers", None)
 
-        assert self.reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm")
+        assert self.reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm")
         self.model = self._load_model()
 
     def _load_model(self):
@@ -279,13 +279,15 @@ class RerankerHybrid(HybridStrategy):
     def _load_reranker(self):
         reranker_type = self.args.get("reranker_type", "classifier")
         reranker_name = self.args['reranker_name']
-        assert reranker_type in ("classifier", "seq2seq", "flag_classifier", "flag_llm", "flag_layerwise_llm", "jina")
+        assert reranker_type in (
+            "classifier", "seq2seq", "flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm", "jina"
+        )
         logging.info(f"Loading {reranker_type} reranker {reranker_name}")
         if reranker_type == "classifier":
             self.reranker = ClassifierReranker(**self.args)
         elif reranker_type == "seq2seq":
             self.reranker = Seq2SeqReranker(**self.args)
-        elif reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm"):
+        elif reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm"):
             self.reranker = FlagReranker(**self.args)
         elif reranker_type == "jina":
             self.reranker = JinaReranker(**self.args)
