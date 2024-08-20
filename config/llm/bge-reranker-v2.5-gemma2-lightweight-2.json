@@ -1,0 +1,22 @@
+[
+  {
+    "name": "BAAI/bge-reranker-v2.5-gemma2-lightweight",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "BAAI/bge-reranker-v2.5-gemma2-lightweight",
+      "reranker_type": "flag_lightweight_llm",
+      "batch_size": 32,
+      "fp16": true,
+      "cutoff_layers": 28
+    },
+    "models": [
+      {
+        "name": "BAAI/bge-multilingual-gemma2",
+        "fp16": true,
+        "q_prefix": "<instruct>Given a web search query, retrieve relevant passages that answer the query.\n<query>"
+      }
+    ]
+  }
+]

@@ -201,17 +201,25 @@ class FlagReranker(Reranker):
         self.use_bf16 = kwargs.get("bf16", False)
         self.reranker_type = kwargs["reranker_type"]
         self.cutoff_layers = kwargs.get("cutoff_layers", 28)
+        self.compress_ratio = kwargs.get("compress_ratio", None)
+        self.compress_layers = kwargs.get("compress_layers", None)
+
         assert self.reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm")
         self.model = self._load_model()
 
     def _load_model(self):
-        from FlagEmbedding import FlagReranker, FlagLLMReranker, LayerWiseFlagLLMReranker
         if self.reranker_type == "flag_classifier":
+            from FlagEmbedding.flag_reranker import FlagReranker
             model = FlagReranker(self.reranker_name, use_fp16=self.use_fp16 or self.use_bf16)
         elif self.reranker_type == "flag_llm":
+            from FlagEmbedding.flag_reranker import FlagLLMReranker
             model = FlagLLMReranker(self.reranker_name, use_fp16=self.use_fp16, use_bf16=self.use_bf16)
         elif self.reranker_type == "flag_layerwise_llm":
+            from FlagEmbedding.flag_reranker import LayerWiseFlagLLMReranker
             model = LayerWiseFlagLLMReranker(self.reranker_name, use_fp16=self.use_fp16, use_bf16=self.use_bf16)
+        elif self.reranker_type == "flag_lightweight_llm":
+            from FlagEmbedding.flag_reranker import LightWeightFlagLLMReranker
+            model = LightWeightFlagLLMReranker(self.reranker_name, use_fp16=self.use_fp16, use_bf16=self.use_bf16)
         else:
             raise ValueError(f"Unknown reranker type {self.reranker_type}")
         return model
@@ -219,8 +227,13 @@ class FlagReranker(Reranker):
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
         pairs = list(zip(queries, docs))
         args = {"normalize": proba}
-        if self.reranker_type == "flag_layerwise_llm":
+        if self.reranker_type in ("flag_layerwise_llm", "flag_lightweight_llm"):
             args["cutoff_layers"] = self.cutoff_layers
+        if self.reranker_type == "flag_lightweight_llm":
+            if self.compress_ratio is not None:
+                args["compress_ratio"] = self.compress_ratio
+            if self.compress_layers is not None:
+                args["compress_layers"] = self.compress_layers
         return self.model.compute_score(pairs, **args)
 
 
