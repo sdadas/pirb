@@ -203,6 +203,7 @@ class FlagReranker(Reranker):
         self.cutoff_layers = kwargs.get("cutoff_layers", 28)
         self.compress_ratio = kwargs.get("compress_ratio", None)
         self.compress_layers = kwargs.get("compress_layers", None)
+        self.max_length = kwargs.get("max_seq_length", None)
 
         assert self.reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm")
         self.model = self._load_model()
@@ -226,7 +227,9 @@ class FlagReranker(Reranker):
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
         pairs = list(zip(queries, docs))
-        args = {"normalize": proba}
+        args = {"normalize": proba, "batch_size": len(pairs)}
+        if self.max_length is not None:
+            args["max_length"] = self.max_length
         if self.reranker_type in ("flag_layerwise_llm", "flag_lightweight_llm"):
             args["cutoff_layers"] = self.cutoff_layers
         if self.reranker_type == "flag_lightweight_llm":
