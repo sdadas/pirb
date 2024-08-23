@@ -7,9 +7,10 @@
       "type": "reranker",
       "reranker_name": "BAAI/bge-reranker-v2.5-gemma2-lightweight",
       "reranker_type": "flag_lightweight_llm",
-      "batch_size": 32,
+      "batch_size": 16,
       "fp16": true,
-      "cutoff_layers": 28
+      "cutoff_layers": 28,
+      "max_seq_length": 4096
     },
     "models": [
       {
