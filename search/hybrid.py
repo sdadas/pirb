@@ -234,7 +234,9 @@ class FlagReranker(Reranker):
                 args["compress_ratio"] = self.compress_ratio
             if self.compress_layers is not None:
                 args["compress_layers"] = self.compress_layers
-        return self.model.compute_score(pairs, **args)
+        res = np.array(self.model.compute_score(pairs, **args)).flatten().tolist()
+        assert len(res) == len(pairs)
+        return res
 
 
 class JinaReranker(Reranker):
