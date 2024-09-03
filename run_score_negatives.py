@@ -79,6 +79,10 @@ class HardNegsArgs:
         default="contents",
         metadata={"help": "Name of the default text field"},
     )
+    use_cached_scores: bool = field(
+        default=True,
+        metadata={"help": "Use scores.jsonl file if exists to get retrieved docs"},
+    )
 
 
 class HardNegsBuilder:
@@ -111,7 +115,7 @@ class HardNegsBuilder:
             self.args.queries_end_idx = len(queries)
         queries = queries[self.args.queries_start_idx:self.args.queries_end_idx]
         scores_path = os.path.join(self.args.data_dir, self.task.task_id, "scores.jsonl")
-        if os.path.exists(scores_path):
+        if os.path.exists(scores_path) and self.args.use_cached_scores:
             index_results = self._load_retrieved_docs_from_scores(scores_path, queries)
         else:
             index_results = self._run_retrievers(queries)
