@@ -83,6 +83,10 @@ class HardNegsArgs:
         default=True,
         metadata={"help": "Use scores.jsonl file if exists to get retrieved docs"},
     )
+    proba: bool = field(
+        default=True,
+        metadata={"help": "Return probabilities"},
+    )
 
 
 class HardNegsBuilder:
@@ -175,7 +179,7 @@ class HardNegsBuilder:
         out = {"query_id": query.id, "positive": query.relevant, "negative": negs}
         ids2docs = lambda ids: [passages.get(val) for val in ids]
         unique_docs = set(query.relevant)
-        out["positive_scores"] = self.reraker.rerank(query.text, ids2docs(query.relevant), proba=True)
+        out["positive_scores"] = self.reraker.rerank(query.text, ids2docs(query.relevant), proba=self.args.proba)
         for idx, result in enumerate(index_results):
             hits = result.get(query.id)
             if hits is None:
@@ -185,7 +189,7 @@ class HardNegsBuilder:
                 docids = docids[:self.args.max_negs_per_index]
             key = self.retriever_keys[idx]
             unique_docs.update(docids)
-            scores = self.reraker.rerank(query.text, ids2docs(docids), proba=True) if len(docids) > 0 else []
+            scores = self.reraker.rerank(query.text, ids2docs(docids), proba=self.args.proba) if len(docids) > 0 else []
             negs[key] = {"docs": docids, "scores": scores}
         out["ndcg"] = self._compute_ndcg(out)
         return out
