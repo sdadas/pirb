@@ -92,6 +92,10 @@ class DenseIndex(SearchIndex):
         elif self.encoder_spec.get("bf16", False):
             torch_dtype = torch.bfloat16
         model = SentenceTransformer(self.encoder_spec["name"], model_kwargs={"torch_dtype": torch_dtype})
+        if self.encoder_spec.get("fp16", False):
+            model.half()
+        elif self.encoder_spec.get("bf16", False):
+            model.bfloat16()
         if "max_seq_length" in self.encoder_spec:
             model.max_seq_length = int(self.encoder_spec["max_seq_length"])
         if self.use_bettertransformer:
