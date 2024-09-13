@@ -84,6 +84,7 @@ class ClassifierReranker(Reranker):
         self.maxlen = kwargs.get("max_seq_length", 512)
         self.template = kwargs.get("template", "{query}{sep}{sep}{passage}")
         self.use_bettertransformer = kwargs.get("use_bettertransformer", False)
+        self.model_kwargs = kwargs.get("model_kwargs", {})
         model, tokenizer = self._load_classifier()
         self.model: PreTrainedModel = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
@@ -97,7 +98,9 @@ class ClassifierReranker(Reranker):
             dtype = torch.float16
         elif self.bf16:
             dtype = torch.bfloat16
-        model = AutoModelForSequenceClassification.from_pretrained(self.reranker_name, torch_dtype=dtype).to(self.device)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            self.reranker_name, torch_dtype=dtype, **self.model_kwargs
+        ).to(self.device)
         model.eval()
         if self.use_bettertransformer:
             from optimum.bettertransformer import BetterTransformer
@@ -130,6 +133,7 @@ class Seq2SeqReranker(Reranker):
         self.yes_token = kwargs.get("yes_token", "yes")
         self.no_token = kwargs.get("no_token", "no")
         self.use_bettertransformer = kwargs.get("use_bettertransformer", False)
+        self.model_kwargs = kwargs.get("model_kwargs", {})
         model, tokenizer = self._load_model()
         self.model = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
@@ -154,7 +158,9 @@ class Seq2SeqReranker(Reranker):
             dtype = torch.float16
         elif self.bf16:
             dtype = torch.bfloat16
-        model = AutoModelForSeq2SeqLM.from_pretrained(self.reranker_name, torch_dtype=dtype).to(self.device)
+        model = AutoModelForSeq2SeqLM.from_pretrained(
+            self.reranker_name, torch_dtype=dtype, **self.model_kwargs
+        ).to(self.device)
         model.eval()
         if self.use_bettertransformer:
             from optimum.bettertransformer import BetterTransformer
@@ -204,7 +210,6 @@ class FlagReranker(Reranker):
         self.compress_ratio = kwargs.get("compress_ratio", None)
         self.compress_layers = kwargs.get("compress_layers", None)
         self.max_length = kwargs.get("max_seq_length", None)
-
         assert self.reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm")
         self.model = self._load_model()
 
@@ -250,6 +255,7 @@ class JinaReranker(Reranker):
         self.use_fp16 = kwargs.get("fp16", False)
         self.batch_size = kwargs.get("batch_size", 32)
         self.max_length = kwargs.get("max_seq_length", 1024)
+        self.model_kwargs = kwargs.get("model_kwargs", {})
         self.model = self._load_model()
 
     def _load_model(self):
@@ -260,6 +266,7 @@ class JinaReranker(Reranker):
             self.reranker_name,
             torch_dtype=dtype,
             trust_remote_code=True,
+            **self.model_kwargs
         )
         model.to("cuda")
         model.eval()
