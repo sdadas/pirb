@@ -1,6 +1,6 @@
 [
   {
-    "name": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+    "name": "Alibaba-NLP/gte-Qwen2-7B-instruct",
     "bf16": true,
     "q_prefix": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
     "max_seq_length": 8192,
