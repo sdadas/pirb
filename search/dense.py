@@ -69,6 +69,8 @@ class DenseIndex(SearchIndex):
         self._averaging = encoder.get("enable_averaging", False)
         self.data_dir = data_dir
         self.index_name = encoder["name"].replace("/", "_").replace(".", "_")
+        self.model_kwargs = encoder.get("model_kwargs", {})
+        self.padding_side = encoder.get("padding_side", None)
         if self._averaging:
             self.index_name += "_averaging"
         self.index_dir = os.path.join(self.data_dir, self.index_name)
@@ -91,13 +93,17 @@ class DenseIndex(SearchIndex):
             torch_dtype = torch.float16
         elif self.encoder_spec.get("bf16", False):
             torch_dtype = torch.bfloat16
-        model = SentenceTransformer(self.encoder_spec["name"], model_kwargs={"torch_dtype": torch_dtype})
+        model_kwargs = {"torch_dtype": torch_dtype}
+        model_kwargs.update(self.model_kwargs)
+        model = SentenceTransformer(self.encoder_spec["name"], model_kwargs=model_kwargs)
         if self.encoder_spec.get("fp16", False):
             model.half()
         elif self.encoder_spec.get("bf16", False):
             model.bfloat16()
         if "max_seq_length" in self.encoder_spec:
             model.max_seq_length = int(self.encoder_spec["max_seq_length"])
+        if self.padding_side is not None:
+            model.tokenizer.padding_side = self.padding_side
         if self.use_bettertransformer:
             patched = patch_sentence_transformer(model)
             if patched:
