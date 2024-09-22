@@ -1,0 +1,22 @@
+[
+  {
+    "name": "jinaai/jina-embeddings-v3",
+    "bf16": true,
+    "q_prefix_name": "retrieval.query",
+    "p_prefix_name": "retrieval.passage",
+    "batch_size": 64,
+    "model_kwargs": {
+      "trust_remote_code": true
+    },
+    "tasks": {
+      "arguana-pl": {
+        "q_prefix_name": "text-matching",
+        "p_prefix_name": "text-matching"
+      },
+      "quora-pl": {
+        "q_prefix_name": "text-matching",
+        "p_prefix_name": "text-matching"
+      }
+    }
+  }
+]

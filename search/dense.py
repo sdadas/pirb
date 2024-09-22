@@ -64,7 +64,7 @@ class TextAveragingEncoder:
 
 class DenseIndex(SearchIndex):
 
-    def __init__(self, data_dir: str, encoder: Dict, normalize=True, use_bettertransformer=False, raw_mode=True):
+    def __init__(self, data_dir: str, encoder: Dict, use_bettertransformer=False, raw_mode=True):
         self._st_bs = encoder.get("batch_size", 32)
         self._averaging = encoder.get("enable_averaging", False)
         self.data_dir = data_dir
@@ -76,12 +76,14 @@ class DenseIndex(SearchIndex):
         self.index_dir = os.path.join(self.data_dir, self.index_name)
         self.index_vectors_path = os.path.join(self.index_dir, "index.bin")
         self.index_ids_path = os.path.join(self.index_dir, "ids.bin")
-        self.normalize = normalize
+        self.normalize = encoder.get("normalize", True)
         self.raw_mode = raw_mode
         self.use_bettertransformer = use_bettertransformer
         self.encoder_spec = encoder
-        self.query_prefix: str = encoder.get("q_prefix", None)
-        self.passage_prefix: str = encoder.get("p_prefix", None)
+        self.query_prefix: Optional[str] = encoder.get("q_prefix", None)
+        self.passage_prefix: Optional[str] = encoder.get("p_prefix", None)
+        self.query_prefix_name: Optional[str] = encoder.get("q_prefix_name", None)
+        self.passage_prefix_name: Optional[str] = encoder.get("p_prefix_name", None)
         self.encoder: Optional[SentenceTransformer] = None
         self._ids = None
         self._index = None
@@ -95,7 +97,7 @@ class DenseIndex(SearchIndex):
             torch_dtype = torch.bfloat16
         model_kwargs = {"torch_dtype": torch_dtype}
         model_kwargs.update(self.model_kwargs)
-        model = SentenceTransformer(self.encoder_spec["name"], model_kwargs=model_kwargs)
+        model = SentenceTransformer(self.encoder_spec["name"], trust_remote_code=True, model_kwargs=model_kwargs)
         if self.encoder_spec.get("fp16", False):
             model.half()
         elif self.encoder_spec.get("bf16", False):
@@ -114,6 +116,16 @@ class DenseIndex(SearchIndex):
         if self._averaging:
             model = TextAveragingEncoder(model)
         self.encoder = model
+
+    def _encode_kwargs(self, query: bool) -> Dict:
+        kwargs = {"normalize_embeddings": self.normalize, "batch_size": self._st_bs, 'convert_to_tensor': self.raw_mode}
+        prefix = self.query_prefix if query else self.passage_prefix
+        prefix_name = self.query_prefix_name if query else self.passage_prefix_name
+        if prefix:
+            kwargs["prompt"] = prefix
+        elif prefix_name:
+            kwargs["prompt_name"] = prefix_name
+        return kwargs
 
     def exists(self) -> bool:
         return os.path.exists(self.index_vectors_path) and os.path.exists(self.index_ids_path)
@@ -135,10 +147,8 @@ class DenseIndex(SearchIndex):
             if parts_num > 1:
                 logging.info(f"Encoding data part {idx} of {parts_num}")
             batch = texts[i:i + mega_batch_size]
-            batch_emb = self.encoder.encode(
-                batch, normalize_embeddings=self.normalize, convert_to_tensor=self.raw_mode,
-                batch_size=self._st_bs, prompt=self.passage_prefix
-            )
+            kwargs = self._encode_kwargs(query=False)
+            batch_emb = self.encoder.encode(batch, **kwargs)
             idx += 1
             if self.raw_mode:
                 embeddings.append(batch_emb.detach().cpu())
@@ -165,10 +175,8 @@ class DenseIndex(SearchIndex):
     def _search_vectors(self, batch: List[IndexInput], top_k: int) -> Dict:
         texts = [val.text for val in batch]
         qids = [val.id for val in batch]
-        emb = self.encoder.encode(
-            texts, show_progress_bar=False, normalize_embeddings=self.normalize,
-            batch_size=self._st_bs, convert_to_tensor=self.raw_mode, prompt=self.query_prefix
-        )
+        kwargs = self._encode_kwargs(query=True)
+        emb = self.encoder.encode(texts, show_progress_bar=False, **kwargs)
         return self._search_in_memory(emb, qids, top_k) if self.raw_mode else self._search_in_faiss(emb, qids, top_k)
 
     def _search_in_memory(self, emb, qids, top_k):
