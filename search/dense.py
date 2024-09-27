@@ -125,6 +125,8 @@ class DenseIndex(SearchIndex):
             kwargs["prompt"] = prefix
         elif prefix_name:
             kwargs["prompt_name"] = prefix_name
+            if "jina-embeddings-v3" in self.index_name:
+                kwargs["task"] = prefix_name
         return kwargs
 
     def exists(self) -> bool:
