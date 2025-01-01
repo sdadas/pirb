@@ -97,7 +97,8 @@ class DenseIndex(SearchIndex):
             torch_dtype = torch.bfloat16
         model_kwargs = {"torch_dtype": torch_dtype}
         model_kwargs.update(self.model_kwargs)
-        model = SentenceTransformer(self.encoder_spec["name"], trust_remote_code=True, model_kwargs=model_kwargs)
+        trust = model_kwargs.get("trust_remote_code", True)
+        model = SentenceTransformer(self.encoder_spec["name"], trust_remote_code=trust, model_kwargs=model_kwargs)
         if self.encoder_spec.get("fp16", False):
             model.half()
         elif self.encoder_spec.get("bf16", False):

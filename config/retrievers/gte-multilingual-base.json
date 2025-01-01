@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Alibaba-NLP/gte-multilingual-base",
+    "fp16": true,
+    "max_seq_length": 8192,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  }
+]
