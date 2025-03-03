@@ -16,6 +16,42 @@ from data import IndexInput, IndexResult
 from search.base import SearchIndex, patch_sentence_transformer
 
 
+class OpenAIEmbeddings:
+
+    def __init__(self, config: Dict):
+        from openai import OpenAI
+        self.config = config
+        self.model = config["name"]
+        self.api_base = config["api_base"]
+        self.api_key = config.get("api_key", "-")
+        self.batch_size = config.get("batch_size", 32)
+        self.client = OpenAI(api_key=self.api_key, base_url=self.api_base)
+        logging.info("Using remote embeddings via OpenAI API")
+
+    def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
+        if isinstance(batch, str):
+            batch = [batch]
+        if kwargs.get("prompt", None) is not None:
+            prompt = kwargs["prompt"]
+            batch = [prompt + val for val in batch]
+        results = []
+        pbar = tqdm(total=len(batch), disable=not kwargs.get("show_progress_bar", True))
+        for i in range(0, len(batch), self.batch_size):
+            mini_batch = batch[i:i + self.batch_size]
+            results.append(self._encode_batch(mini_batch, convert_to_tensor=convert_to_tensor))
+            pbar.update(self.batch_size)
+        pbar.close()
+        return torch.vstack(results) if convert_to_tensor else np.vstack(results)
+
+    def _encode_batch(self, batch: Union[str, List[str]], convert_to_tensor: bool):
+        result = self.client.embeddings.create(input=batch, model=self.model, encoding_format="float")
+        embeddings = [val.embedding for val in result.data]
+        if convert_to_tensor:
+            return torch.tensor(embeddings, dtype=torch.float32)
+        else:
+            return np.array(embeddings, dtype=np.float32)
+
+
 class TextAveragingEncoder:
 
     def __init__(self, encoder: SentenceTransformer):
@@ -90,6 +126,9 @@ class DenseIndex(SearchIndex):
 
     def _load_encoder(self):
         if self.encoder is not None: return
+        if self.encoder_spec.get("type", None) == "api":
+            self.encoder = OpenAIEmbeddings(self.encoder_spec)
+            return
         torch_dtype = torch.float32
         if self.encoder_spec.get("fp16", False):
             torch_dtype = torch.float16
