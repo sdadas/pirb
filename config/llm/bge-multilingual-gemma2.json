@@ -2,6 +2,16 @@
   {
     "name": "BAAI/bge-multilingual-gemma2",
     "fp16": true,
-    "q_prefix": "<instruct>Given a web search query, retrieve relevant passages that answer the query.\n<query>"
+    "q_prefix": "<instruct>Given a web search query, retrieve relevant passages that answer the query.\n<query>",
+    "tasks": {
+      "arguana-pl": {
+        "q_prefix": "<instruct>Given a claim, find documents that refute the claim.\n<query>",
+        "p_prefix": "<instruct>Given a claim, find documents that refute the claim.\n<query>"
+      },
+      "quora-pl": {
+        "q_prefix": "<instruct>Given a question, retrieve questions that are semantically equivalent to the given question.\n<query>",
+        "p_prefix": "<instruct>Given a question, retrieve questions that are semantically equivalent to the given question.\n<query>"
+      }
+    }
   }
 ]

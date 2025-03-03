@@ -210,8 +210,11 @@ class FlagReranker(Reranker):
         self.compress_ratio = kwargs.get("compress_ratio", None)
         self.compress_layers = kwargs.get("compress_layers", None)
         self.max_length = kwargs.get("max_seq_length", None)
+        self.prompt = kwargs.get("prompt", None)
         assert self.reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm")
         self.model = self._load_model()
+        if self.prompt is not None:
+            logging.info(f"Using custom prompt: '{self.prompt}'")
 
     def _load_model(self):
         if self.reranker_type == "flag_classifier":
@@ -242,6 +245,8 @@ class FlagReranker(Reranker):
                 args["compress_ratio"] = self.compress_ratio
             if self.compress_layers is not None:
                 args["compress_layers"] = self.compress_layers
+            if self.prompt is not None:
+                args["prompt"] = self.prompt
         res = np.array(self.model.compute_score(pairs, **args)).flatten().tolist()
         assert len(res) == len(pairs)
         return res
