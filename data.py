@@ -110,23 +110,35 @@ class RawJsonlTask(RetrievalTask):
 
     def __init__(self, task_id: str):
         super().__init__(task_id, "Web")
+        self.symmetric_task = False
+        self.skip_self = False
 
     def prepare_task(self, data_dir: str):
         passages_path = os.path.join(data_dir, self.task_id, "passages/passages.jsonl")
         queries_path = os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
-        if not os.path.exists(passages_path):
-            raise ValueError("Missing passages file %s, you should copy it manually" % (passages_path,))
         if not os.path.exists(queries_path):
             raise ValueError("Missing queries file %s, you should copy it manually" % (queries_path,))
+        if not os.path.exists(passages_path):
+            logging.error(f"⚠️ Detected {self.task_id} as symmetric task ⚠️")
+            self.symmetric_task = True
+            self.skip_self = True
 
     def is_available(self, data_dir) -> bool:
-        passages_path = os.path.join(data_dir, self.task_id, "passages/passages.jsonl")
         queries_path = os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
-        if not os.path.exists(passages_path) or not os.path.exists(queries_path):
+        if not os.path.exists(queries_path):
             logging.error(f"⚠️ Dataset {self.task_id} is not available, removing it from the evaluation ⚠️")
             return False
         else:
             return True
+
+    def passages_path(self, data_dir: str):
+        if self.symmetric_task:
+            return os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
+        else:
+            return os.path.join(data_dir, self.task_id, "passages/passages.jsonl")
+
+    def queries_path(self, data_dir: str):
+        return os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
 
 
 class MFAQTask(RetrievalTask):

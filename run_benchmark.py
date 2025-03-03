@@ -56,7 +56,7 @@ class BenchmarkArgs:
         metadata={"help": "Directory where indexes and cached results are stored"},
     )
     use_bettertransformer: bool = field(
-        default=True,
+        default=False,
         metadata={"help": "Patch dense encoders with BetterTransformer optimizations"},
     )
     scope: str = field(

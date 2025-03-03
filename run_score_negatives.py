@@ -94,6 +94,7 @@ class HardNegsBuilder:
     def __init__(self, args: HardNegsArgs):
         self.args = args
         self.task = RawJsonlTask(self.args.task_name)
+        self.task.prepare_task(self.args.data_dir)
         self.retriever_keys = [val.strip() for val in self.args.retrievers_keys.split(",")]
         self.indices: List[SearchIndex] = self.create_indices()
         assert len(self.retriever_keys) == len(self.indices)
@@ -184,6 +185,8 @@ class HardNegsBuilder:
             hits = result.get(query.id)
             if hits is None:
                 hits = []
+            if self.task.skip_self:
+                hits = [hit for hit in hits if hit.id != query.id]
             docids = [hit.id for hit in hits if hit.id not in unique_docs]
             if len(docids) > self.args.max_negs_per_index:
                 docids = docids[:self.args.max_negs_per_index]
