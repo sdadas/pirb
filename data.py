@@ -83,7 +83,7 @@ class RetrievalTask:
                 if self.limit_queries is not None and idx >= self.limit_queries:
                     break
                 value = json.loads(line.strip())
-                relevant = value["relevant"]
+                relevant = value.get("relevant", [])
                 relevant_scores = value.get("relevant_scores", None)
                 if relevant_scores is None:
                     relevant_scores = [1] * len(relevant)
