@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Snowflake/snowflake-arctic-embed-l-v2.0",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "q_prefix_name": "query"
+  }
+]
