@@ -1,0 +1,18 @@
+[
+  {
+    "name": "sdadas/mmlw-retrieval-roberta-large-v2",
+    "bf16": true,
+    "q_prefix": "[query]: ",
+    "batch_size": 32,
+    "model_kwargs": {
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    },
+    "tasks": {
+      "quora-pl" : {
+        "q_prefix": "[sts]: ",
+        "p_prefix": "[sts]: "
+      }
+    }
+  }
+]

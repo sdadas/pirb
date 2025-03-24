@@ -19,3 +19,7 @@ RUN mkdir /tmp/stage && \
     pip install . && \
     cd - && \
     rm -rf /tmp/stage
+
+# Install XFormers
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6"
+RUN pip install -v -U git+https://github.com/facebookresearch/xformers.git@v0.0.28.post2#egg=xformers
