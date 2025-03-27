@@ -2,6 +2,8 @@ import logging
 import math
 import os.path
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import List, Iterable, Dict, Optional, Union
 import faiss
 import numpy as np
@@ -10,7 +12,7 @@ from joblib import load
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import semantic_search
 from tqdm import tqdm
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizer, AutoTokenizer
 
 from data import IndexInput, IndexResult
 from search.base import SearchIndex, patch_sentence_transformer
@@ -22,11 +24,22 @@ class OpenAIEmbeddings:
         from openai import OpenAI
         self.config = config
         self.model = config["name"]
+        self.api_name = config.get("api_name", self.model)
         self.api_base = config["api_base"]
         self.api_key = config.get("api_key", "-")
         self.batch_size = config.get("batch_size", 32)
+        self.extra_body = self._init_extra_body()
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        self.max_len = config.get("model_max_length", self.tokenizer.model_max_length)
         self.client = OpenAI(api_key=self.api_key, base_url=self.api_base)
+        self.threads = config.get("threads", 8)
         logging.info("Using remote embeddings via OpenAI API")
+
+    def _init_extra_body(self):
+        extra_body = {}
+        if self.config.get("truncate_prompt_tokens", None) is not None:
+            extra_body["truncate_prompt_tokens"] = self.config["truncate_prompt_tokens"]
+        return extra_body
 
     def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
         if isinstance(batch, str):
@@ -38,19 +51,30 @@ class OpenAIEmbeddings:
         pbar = tqdm(total=len(batch), disable=not kwargs.get("show_progress_bar", True))
         for i in range(0, len(batch), self.batch_size):
             mini_batch = batch[i:i + self.batch_size]
-            results.append(self._encode_batch(mini_batch, convert_to_tensor=convert_to_tensor))
+            mini_batch_truncated = self._truncate_prompt_tokens(mini_batch, self.max_len)
+            partial_func = partial(self._encode_batch, convert_to_tensor=convert_to_tensor)
+            with ThreadPoolExecutor(max_workers=self.threads) as executor:
+                thread_results = executor.map(partial_func, mini_batch_truncated)
+            for thread_result in thread_results:
+                results.append(thread_result)
             pbar.update(self.batch_size)
         pbar.close()
         return torch.vstack(results) if convert_to_tensor else np.vstack(results)
 
     def _encode_batch(self, batch: Union[str, List[str]], convert_to_tensor: bool):
-        result = self.client.embeddings.create(input=batch, model=self.model, encoding_format="float")
+        result = self.client.embeddings.create(input=batch, model=self.api_name, encoding_format="float", extra_body=self.extra_body)
         embeddings = [val.embedding for val in result.data]
         if convert_to_tensor:
             return torch.tensor(embeddings, dtype=torch.float32)
         else:
             return np.array(embeddings, dtype=np.float32)
 
+    def _truncate_prompt_tokens(self, batch, max_len):
+        truncated = []
+        for i in range(0, len(batch)):
+            tokens = self.tokenizer.encode(batch[i], add_special_tokens=True, truncation=True, max_length=max_len)
+            truncated.append(self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False))
+        return truncated
 
 class TextAveragingEncoder:
 
@@ -167,7 +191,7 @@ class DenseIndex(SearchIndex):
             kwargs["prompt_name"] = prefix_name
             if "jina-embeddings-v3" in self.index_name:
                 kwargs["task"] = prefix_name
-        if "gte-qwen2" in self.index_name.lower():
+        if "gte-qwen2" in self.index_name.lower() and not isinstance(self.encoder, OpenAIEmbeddings):
             kwargs["is_causal"] = False
             self.encoder.module_kwargs["0"] = ["is_causal"]
         return kwargs
