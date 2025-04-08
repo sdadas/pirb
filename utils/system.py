@@ -1,7 +1,9 @@
 import logging
 import os
+import sys
 import subprocess
 import platform
+import importlib.util
 from pathlib import Path
 
 
@@ -20,3 +22,11 @@ def set_java_env():
             res = os.path.realpath(res)
         res = str(Path(res).parent)
         os.environ["JAVA_HOME"] = res
+
+
+def install_package(import_name: str, package_name: str = None):
+    if package_name is None:
+        package_name = import_name
+    if importlib.util.find_spec(import_name) is None:
+        logging.info(f"Installing required package '{package_name}'")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])

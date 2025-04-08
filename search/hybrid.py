@@ -16,6 +16,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, PreT
     AutoModelForSeq2SeqLM
 from data import IndexInput, IndexResult, RetrievalTask
 from search.base import SearchIndex, SmartTemplate
+from utils.system import install_package
 
 
 class HybridStrategy(ABC):
@@ -282,6 +283,32 @@ class JinaReranker(Reranker):
         return self.model.compute_score(pairs, batch_size=self.batch_size, max_length=self.max_length)
 
 
+class MixedbreadReranker(Reranker):
+
+    def __init__(self, **kwargs):
+        install_package("mxbai_rerank", "mxbai-rerank")
+        self.reranker_name = kwargs["reranker_name"]
+        self.use_bf16 = kwargs.get("bf16", False)
+        self.use_fp16 = kwargs.get("fp16", False)
+        self.batch_size = kwargs.get("batch_size", 32)
+        self.max_length = kwargs.get("max_seq_length", 8192)
+        self.model = self._load_model()
+
+    def _load_model(self):
+        from mxbai_rerank import MxbaiRerankV2
+        dtype = "auto"
+        if self.use_bf16: dtype = torch.bfloat16
+        elif self.use_fp16: dtype = torch.float16
+        model = MxbaiRerankV2(self.reranker_name, device="cuda", torch_dtype=dtype, max_length=self.max_length)
+        return model
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        scores = self.model._compute_scores(
+            queries=queries, documents=docs, batch_size=self.batch_size, show_progress=False
+        )
+        return scores.tolist()
+
+
 class RerankerHybrid(HybridStrategy):
 
     def __init__(self, **kwargs):
@@ -297,7 +324,8 @@ class RerankerHybrid(HybridStrategy):
         reranker_type = self.args.get("reranker_type", "classifier")
         reranker_name = self.args['reranker_name']
         assert reranker_type in (
-            "classifier", "seq2seq", "flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm", "jina"
+            "classifier", "seq2seq", "flag_classifier", "jina", "mixedbread",
+            "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm"
         )
         logging.info(f"Loading {reranker_type} reranker {reranker_name}")
         if reranker_type == "classifier":
@@ -308,6 +336,8 @@ class RerankerHybrid(HybridStrategy):
             self.reranker = FlagReranker(**self.args)
         elif reranker_type == "jina":
             self.reranker = JinaReranker(**self.args)
+        elif reranker_type == "mixedbread":
+            self.reranker = MixedbreadReranker(**self.args)
 
     def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         if self.reranker is None:
