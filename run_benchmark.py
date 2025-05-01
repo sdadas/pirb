@@ -205,6 +205,7 @@ def _load_models(config_path: str) -> List[Dict]:
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.INFO)
     logging.root.setLevel(logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.ERROR)
     parser = HfArgumentParser([BenchmarkArgs])
     args = parser.parse_args_into_dataclasses()[0]
     encoders = _load_models(args.models_config)

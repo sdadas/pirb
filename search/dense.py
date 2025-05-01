@@ -1,9 +1,11 @@
 import logging
 import math
 import os.path
+import random
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from threading import Lock
 from typing import List, Iterable, Dict, Optional, Union
 import faiss
 import numpy as np
@@ -31,8 +33,12 @@ class OpenAIEmbeddings:
         self.extra_body = self._init_extra_body()
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.max_len = config.get("model_max_length", self.tokenizer.model_max_length)
-        self.client = OpenAI(api_key=self.api_key, base_url=self.api_base)
+        if isinstance(self.api_base, list):
+            self.client = [OpenAI(api_key=self.api_key, base_url=val) for val in self.api_base]
+        else:
+            self.client = OpenAI(api_key=self.api_key, base_url=self.api_base)
         self.threads = config.get("threads", 8)
+        self.lock = Lock()
         logging.info("Using remote embeddings via OpenAI API")
 
     def _init_extra_body(self):
@@ -49,21 +55,29 @@ class OpenAIEmbeddings:
             batch = [prompt + val for val in batch]
         results = []
         pbar = tqdm(total=len(batch), disable=not kwargs.get("show_progress_bar", True))
-        for i in range(0, len(batch), self.batch_size):
-            mini_batch = batch[i:i + self.batch_size]
-            mini_batch_truncated = self._truncate_prompt_tokens(mini_batch, self.max_len)
-            partial_func = partial(self._encode_batch, convert_to_tensor=convert_to_tensor)
-            with ThreadPoolExecutor(max_workers=self.threads) as executor:
-                thread_results = executor.map(partial_func, mini_batch_truncated)
-            for thread_result in thread_results:
+        with ThreadPoolExecutor(max_workers=self.threads) as executor:
+            generator = self._get_chunks(batch)
+            partial_func = partial(self._encode_batch, convert_to_tensor=convert_to_tensor, pbar=pbar)
+            for thread_result in executor.map(partial_func, generator):
                 results.append(thread_result)
-            pbar.update(self.batch_size)
         pbar.close()
         return torch.vstack(results) if convert_to_tensor else np.vstack(results)
 
-    def _encode_batch(self, batch: Union[str, List[str]], convert_to_tensor: bool):
-        result = self.client.embeddings.create(input=batch, model=self.api_name, encoding_format="float", extra_body=self.extra_body)
+    def _get_chunks(self, data: List[str]):
+        for i in range(0, len(data), self.batch_size):
+            batch = data[i:i + self.batch_size]
+            yield self._truncate_prompt_tokens(batch, self.max_len)
+
+    def _encode_batch(self, batch: List[str], convert_to_tensor: bool, pbar):
+        client = self.client
+        if isinstance(client, list):
+            client = random.choice(client)
+        result = client.embeddings.create(
+            input=batch, model=self.api_name, encoding_format="float", extra_body=self.extra_body, timeout=300
+        )
         embeddings = [val.embedding for val in result.data]
+        with self.lock:
+            pbar.update(len(embeddings))
         if convert_to_tensor:
             return torch.tensor(embeddings, dtype=torch.float32)
         else:
@@ -73,8 +87,10 @@ class OpenAIEmbeddings:
         truncated = []
         for i in range(0, len(batch)):
             tokens = self.tokenizer.encode(batch[i], add_special_tokens=True, truncation=True, max_length=max_len)
-            truncated.append(self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False))
+            texts = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+            truncated.append(texts)
         return truncated
+
 
 class TextAveragingEncoder:
 
