@@ -3,7 +3,6 @@ import math
 import os.path
 import random
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from threading import Lock
 from typing import List, Iterable, Dict, Optional, Union
@@ -15,37 +14,38 @@ from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import semantic_search
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer, AutoTokenizer
+from multiprocessing import Pool
 
 from data import IndexInput, IndexResult
 from search.base import SearchIndex, patch_sentence_transformer
 
 
+def _encode_batch(batch: List[str], api_name: str, api_base: Union[List, str], api_key: str):
+    from openai import OpenAI
+    if isinstance(api_base, list):
+        api_base = random.choice(api_base)
+    client = OpenAI(api_key=api_key, base_url=api_base)
+    result = client.embeddings.create(
+        input=batch, model=api_name, encoding_format="float", timeout=300
+    )
+    embeddings = [val.embedding for val in result.data]
+    return embeddings
+
+
 class OpenAIEmbeddings:
 
     def __init__(self, config: Dict):
-        from openai import OpenAI
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
         self.config = config
         self.model = config["name"]
         self.api_name = config.get("api_name", self.model)
         self.api_base = config["api_base"]
         self.api_key = config.get("api_key", "-")
         self.batch_size = config.get("batch_size", 32)
-        self.extra_body = self._init_extra_body()
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.max_len = config.get("model_max_length", self.tokenizer.model_max_length)
-        if isinstance(self.api_base, list):
-            self.client = [OpenAI(api_key=self.api_key, base_url=val) for val in self.api_base]
-        else:
-            self.client = OpenAI(api_key=self.api_key, base_url=self.api_base)
         self.threads = config.get("threads", 8)
-        self.lock = Lock()
         logging.info("Using remote embeddings via OpenAI API")
-
-    def _init_extra_body(self):
-        extra_body = {}
-        if self.config.get("truncate_prompt_tokens", None) is not None:
-            extra_body["truncate_prompt_tokens"] = self.config["truncate_prompt_tokens"]
-        return extra_body
 
     def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
         if isinstance(batch, str):
@@ -55,11 +55,16 @@ class OpenAIEmbeddings:
             batch = [prompt + val for val in batch]
         results = []
         pbar = tqdm(total=len(batch), disable=not kwargs.get("show_progress_bar", True))
-        with ThreadPoolExecutor(max_workers=self.threads) as executor:
-            generator = self._get_chunks(batch)
-            partial_func = partial(self._encode_batch, convert_to_tensor=convert_to_tensor, pbar=pbar)
-            for thread_result in executor.map(partial_func, generator):
-                results.append(thread_result)
+        with Pool(processes=self.threads) as executor:
+            generator = list(self._get_chunks(batch))
+            partial_func = partial(_encode_batch, api_name=self.api_name, api_base=self.api_base, api_key=self.api_key)
+            for thread_result in executor.imap(partial_func, generator):
+                if convert_to_tensor:
+                    embeddings = torch.tensor(thread_result, dtype=torch.float32)
+                else:
+                    embeddings = np.array(thread_result, dtype=np.float32)
+                results.append(embeddings)
+                pbar.update(self.batch_size)
         pbar.close()
         return torch.vstack(results) if convert_to_tensor else np.vstack(results)
 
@@ -67,21 +72,6 @@ class OpenAIEmbeddings:
         for i in range(0, len(data), self.batch_size):
             batch = data[i:i + self.batch_size]
             yield self._truncate_prompt_tokens(batch, self.max_len)
-
-    def _encode_batch(self, batch: List[str], convert_to_tensor: bool, pbar):
-        client = self.client
-        if isinstance(client, list):
-            client = random.choice(client)
-        result = client.embeddings.create(
-            input=batch, model=self.api_name, encoding_format="float", extra_body=self.extra_body, timeout=300
-        )
-        embeddings = [val.embedding for val in result.data]
-        with self.lock:
-            pbar.update(len(embeddings))
-        if convert_to_tensor:
-            return torch.tensor(embeddings, dtype=torch.float32)
-        else:
-            return np.array(embeddings, dtype=np.float32)
 
     def _truncate_prompt_tokens(self, batch, max_len):
         truncated = []
