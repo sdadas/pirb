@@ -570,7 +570,7 @@ class XGBRankerHybrid(HybridStrategy):
 class HybridIndex(SearchIndex):
 
     def __init__(self, data_dir: str, hybrid_name: str, indices: List[SearchIndex], k0: int,
-                 strategy: Union[HybridStrategy, Dict], task: RetrievalTask, rerank_limit: Optional[int],
+                 strategy: Optional[Union[HybridStrategy, Dict]], task: RetrievalTask, rerank_limit: Optional[int],
                  use_bettertransformer: bool):
         self.data_dir = data_dir
         self.hybrid_name = hybrid_name

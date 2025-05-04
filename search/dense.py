@@ -4,7 +4,6 @@ import os.path
 import random
 from collections import defaultdict
 from functools import partial
-from threading import Lock
 from typing import List, Iterable, Dict, Optional, Union
 import faiss
 import numpy as np
@@ -15,21 +14,69 @@ from sentence_transformers.util import semantic_search
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer, AutoTokenizer
 from multiprocessing import Pool
-
 from data import IndexInput, IndexResult
 from search.base import SearchIndex, patch_sentence_transformer
 
 
-def _encode_batch(batch: List[str], api_name: str, api_base: Union[List, str], api_key: str):
-    from openai import OpenAI
-    if isinstance(api_base, list):
-        api_base = random.choice(api_base)
-    client = OpenAI(api_key=api_key, base_url=api_base)
-    result = client.embeddings.create(
-        input=batch, model=api_name, encoding_format="float", timeout=300
-    )
-    embeddings = [val.embedding for val in result.data]
-    return embeddings
+class VLLMEmbeddings:
+
+    def __init__(self, config: Dict):
+        self.config = config
+        self.batch_size = config.get("batch_size", 32)
+        self.max_len = self.config["max_seq_length"] if "max_seq_length" in self.config else None
+        self.model_name = self.config["name"]
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.model = self._create_model()
+
+    def _create_model(self):
+        from vllm import LLM
+        dtype = "float32"
+        if self.config.get("fp16", False):
+            dtype = "float16"
+        elif self.config.get("bf16", False):
+            dtype = "bfloat16"
+        extra_args = self.config.get("model_kwargs", {})
+        if "max_seq_length" in self.config:
+            extra_args["max_model_len"] = self.config["max_seq_length"]
+        args = {
+            "model": self.model_name,
+            "dtype": dtype,
+            "task": "embed",
+            "trust_remote_code": True,
+            **extra_args
+        }
+        return LLM(**args)
+
+    def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
+        if isinstance(batch, str):
+            batch = [batch]
+        if kwargs.get("prompt", None) is not None:
+            prompt = kwargs["prompt"]
+            batch = [prompt + val for val in batch]
+        pbar = tqdm(total=len(batch), disable=not kwargs.get("show_progress_bar", True))
+        results = []
+        for i in range(0, len(batch), self.batch_size):
+            mini_batch = batch[i:i + self.batch_size]
+            if self.max_len is not None:
+                mini_batch = self._truncate_prompt_tokens(mini_batch)
+            outputs = self.model.embed(mini_batch, use_tqdm=False)
+            result = [val.outputs.embedding for val in outputs]
+            if convert_to_tensor:
+                embeddings = torch.tensor(result, dtype=torch.float32)
+            else:
+                embeddings = np.array(result, dtype=np.float32)
+            results.append(embeddings)
+            pbar.update(self.batch_size)
+        pbar.close()
+        return torch.vstack(results) if convert_to_tensor else np.vstack(results)
+
+    def _truncate_prompt_tokens(self, batch):
+        truncated = []
+        for i in range(0, len(batch)):
+            tokens = self.tokenizer.encode(batch[i], add_special_tokens=True, truncation=True, max_length=self.max_len)
+            texts = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+            truncated.append(texts)
+        return truncated
 
 
 class OpenAIEmbeddings:
@@ -57,7 +104,9 @@ class OpenAIEmbeddings:
         pbar = tqdm(total=len(batch), disable=not kwargs.get("show_progress_bar", True))
         with Pool(processes=self.threads) as executor:
             generator = list(self._get_chunks(batch))
-            partial_func = partial(_encode_batch, api_name=self.api_name, api_base=self.api_base, api_key=self.api_key)
+            partial_func = partial(
+                OpenAIEmbeddings._encode_batch, api_name=self.api_name, api_base=self.api_base, api_key=self.api_key
+            )
             for thread_result in executor.imap(partial_func, generator):
                 if convert_to_tensor:
                     embeddings = torch.tensor(thread_result, dtype=torch.float32)
@@ -80,6 +129,18 @@ class OpenAIEmbeddings:
             texts = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
             truncated.append(texts)
         return truncated
+
+    @staticmethod
+    def _encode_batch(batch: List[str], api_name: str, api_base: Union[List, str], api_key: str):
+        from openai import OpenAI
+        if isinstance(api_base, list):
+            api_base = random.choice(api_base)
+        client = OpenAI(api_key=api_key, base_url=api_base)
+        result = client.embeddings.create(
+            input=batch, model=api_name, encoding_format="float", timeout=300
+        )
+        embeddings = [val.embedding for val in result.data]
+        return embeddings
 
 
 class TextAveragingEncoder:
@@ -158,6 +219,9 @@ class DenseIndex(SearchIndex):
         if self.encoder is not None: return
         if self.encoder_spec.get("type", None) == "api":
             self.encoder = OpenAIEmbeddings(self.encoder_spec)
+            return
+        if self.encoder_spec.get("type", None) == "vllm":
+            self.encoder = VLLMEmbeddings(self.encoder_spec)
             return
         torch_dtype = torch.float32
         if self.encoder_spec.get("fp16", False):
