@@ -360,3 +360,6 @@ class DenseIndex(SearchIndex):
 
     def model_dict(self) -> Dict:
         return self.encoder_spec
+
+    def index_path(self) -> str:
+        return self.index_dir

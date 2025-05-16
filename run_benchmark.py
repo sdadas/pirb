@@ -1,6 +1,7 @@
 import json
 import logging
 import os.path
+import shutil
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -78,6 +79,10 @@ class BenchmarkArgs:
     rerank_limit: int = field(
         default=None,
         metadata={"help": "Maximum number of retrieved docs to sort using reranker (all docs are sorted by default)"}
+    )
+    rm: bool = field(
+        default=False,
+        metadata={"help": "Remove cached indexes after evaluation"}
     )
 
 
@@ -202,6 +207,14 @@ def _load_models(config_path: str) -> List[Dict]:
             return encoders
 
 
+def _add_index_path(paths: List, index):
+    if index.__class__.__name__ == "HybridIndex":
+        for idx in index.indices:
+            paths.append(idx.index_path())
+    else:
+        paths.append(index.index_path())
+
+
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.INFO)
     logging.root.setLevel(logging.INFO)
@@ -230,14 +243,22 @@ if __name__ == '__main__':
 
     logging.info("Running evaluation on %d datasets", len(benchmark))
     evaluator = RetrievalEvaluator(args)
+    index_paths = []
     for encoder in encoders:
         ndcg_tasks = 0.0
         for task in benchmark:
             print(f"Results for task: {task.task_id.upper()}")
             model = AutoIndex.from_config(encoder, task, args)
+            _add_index_path(index_paths, model)
             ndcg_tasks += evaluator.eval_task(task, model, metadata=encoder)
             del model
             torch.cuda.empty_cache()
         print(evaluator.stats)
         evaluator.stats = {}
         print(f"Average NDCG@{args.ndcg_k} for {len(benchmark)} tasks: {ndcg_tasks / len(benchmark):.2f}")
+    if args.rm:
+        logging.info("Removing cached indexes")
+        for index_path in index_paths:
+            if index_path is not None and os.path.isdir(index_path):
+                logging.info(index_path)
+                shutil.rmtree(index_path)

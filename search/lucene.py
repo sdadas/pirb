@@ -76,3 +76,6 @@ class LuceneIndex(SearchIndex):
 
     def model_dict(self) -> Dict:
         return {"name": "bm25"}
+
+    def index_path(self) -> str:
+        return self.index_dir

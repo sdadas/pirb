@@ -108,6 +108,9 @@ class SearchIndex(ABC):
     def model_dict(self) -> Dict:
         raise NotImplementedError()
 
+    def index_path(self) -> str:
+        raise None
+
 
 class SmartTemplate:
 

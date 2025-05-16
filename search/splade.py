@@ -191,3 +191,8 @@ class SpladeIndex(SearchIndex):
 
     def model_dict(self) -> Dict:
         return self.config
+
+    def index_path(self) -> str:
+        return self.index_dir
+
+
