@@ -4,7 +4,7 @@ import os.path
 import random
 from collections import defaultdict
 from functools import partial
-from typing import List, Iterable, Dict, Optional, Union
+from typing import List, Iterable, Dict, Optional, Union, Any, Callable
 import faiss
 import numpy as np
 import torch
@@ -89,10 +89,23 @@ class OpenAIEmbeddings:
         self.api_base = config["api_base"]
         self.api_key = config.get("api_key", "-")
         self.batch_size = config.get("batch_size", 32)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
-        self.max_len = config.get("model_max_length", self.tokenizer.model_max_length)
+        self.tokenizer: Any = self._create_tokenizer(self.model)
+        self.truncate_func: Callable = (
+            self._truncate_prompt_tokens_hf
+            if isinstance(self.tokenizer, PreTrainedTokenizer)
+            else self._truncate_prompt_tokens_tiktoken
+        )
+        self.max_len = config.get("model_max_length")
         self.threads = config.get("threads", 8)
         logging.info("Using remote embeddings via OpenAI API")
+
+    def _create_tokenizer(self, model_name: str):
+        if model_name.startswith("openai/"):
+            import tiktoken
+            model_name = model_name.removeprefix("openai/")
+            return tiktoken.encoding_for_model(model_name)
+        else:
+            return AutoTokenizer.from_pretrained(model_name)
 
     def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
         if isinstance(batch, str):
@@ -120,14 +133,23 @@ class OpenAIEmbeddings:
     def _get_chunks(self, data: List[str]):
         for i in range(0, len(data), self.batch_size):
             batch = data[i:i + self.batch_size]
-            yield self._truncate_prompt_tokens(batch, self.max_len)
+            yield self.truncate_func(batch, self.max_len)
 
-    def _truncate_prompt_tokens(self, batch, max_len):
+    def _truncate_prompt_tokens_hf(self, batch, max_len):
         truncated = []
         for i in range(0, len(batch)):
             tokens = self.tokenizer.encode(batch[i], add_special_tokens=True, truncation=True, max_length=max_len)
-            texts = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-            truncated.append(texts)
+            text = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+            truncated.append(text)
+        return truncated
+
+    def _truncate_prompt_tokens_tiktoken(self, batch, max_len):
+        truncated = []
+        for i in range(0, len(batch)):
+            tokens = self.tokenizer.encode(batch[i])
+            tokens = tokens[:max_len]
+            text = self.tokenizer.decode(tokens)
+            truncated.append(text)
         return truncated
 
     @staticmethod
