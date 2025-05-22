@@ -133,6 +133,7 @@ class OpenAIEmbeddings:
     def _get_chunks(self, data: List[str]):
         for i in range(0, len(data), self.batch_size):
             batch = data[i:i + self.batch_size]
+            batch = [(val if len(val.strip()) > 0 else "?") for val in batch]
             yield self.truncate_func(batch, self.max_len)
 
     def _truncate_prompt_tokens_hf(self, batch, max_len):
