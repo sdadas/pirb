@@ -522,8 +522,33 @@ class LocalMSMarcoTask(RetrievalTask):
 
 class Benchmark:
 
+    def __init__(self, tasks: List[RetrievalTask]):
+        self.tasks = tasks
+
+    def filter(self, scope: str, data_dir: str):
+        benchmark = self.tasks
+        if scope in ("small", "tiny"):
+            benchmark = [task for task in self.tasks if task.is_small(data_dir, scope)]
+        elif scope != "full":
+            filter_ds = {scope.lower()} if "," not in scope else set([val.strip().lower() for val in scope.split(",")])
+            benchmark = [task for task in self.tasks if task.task_id.lower() in filter_ds]
+            filter_ds = filter_ds.difference([task.task_id.lower() for task in benchmark])
+            # Add custom tasks
+            if len(filter_ds) > 0:
+                for task_name in filter_ds:
+                    benchmark.append(RawJsonlTask(task_name))
+        return Benchmark(benchmark)
+
+    def prepare(self, data_dir: str):
+        benchmark = [task for task in self.tasks if task.is_available(data_dir)]
+        for task in benchmark:
+            task.prepare_task(data_dir)
+
+    def __len__(self):
+        return len(self.tasks)
+
     @staticmethod
-    def from_config(config_path: str) -> List[RetrievalTask]:
+    def from_config(config_path: str) -> "Benchmark":
         with open(config_path, "r", encoding="utf-8") as input_file:
             config = json.load(input_file)
         assert isinstance(config, list), "Benchmark config should include a list of task definitions"
@@ -540,4 +565,4 @@ class Benchmark:
                 del task_config["type"]
             task = cls(**task_config)
             tasks.append(task)
-        return tasks
+        return Benchmark(tasks)

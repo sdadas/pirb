@@ -13,7 +13,7 @@ from transformers import HfArgumentParser
 from utils.system import set_java_env
 set_java_env()
 
-from data import RawJsonlTask, RetrievalTask, Benchmark, IndexResult
+from data import RetrievalTask, Benchmark, IndexResult
 from search import SearchIndex, AutoIndex
 
 # patch fcntl on Windows
@@ -226,27 +226,15 @@ if __name__ == '__main__':
 
     benchmark = Benchmark.from_config(args.benchmark_config)
     os.makedirs(args.data_dir, exist_ok=True)
-    benchmark = [task for task in benchmark if task.is_available(args.data_dir)]
-    for task in benchmark:
-        task.prepare_task(args.data_dir)
-
-    if args.scope in ("small", "tiny"):
-        benchmark = [task for task in benchmark if task.is_small(args.data_dir, args.scope)]
-    elif args.scope != "full":
-        filter_ds = {args.scope.lower()} if "," not in args.scope else set([val.strip().lower() for val in args.scope.split(",")])
-        benchmark = [task for task in benchmark if task.task_id.lower() in filter_ds]
-        filter_ds = filter_ds.difference([task.task_id.lower() for task in benchmark])
-        # Add custom tasks
-        if len(filter_ds) > 0:
-            for task_name in filter_ds:
-                benchmark.append(RawJsonlTask(task_name))
+    benchmark.prepare(args.data_dir)
+    benchmark = benchmark.filter(args.scope, args.data_dir)
 
     logging.info("Running evaluation on %d datasets", len(benchmark))
     evaluator = RetrievalEvaluator(args)
     index_paths = []
     for encoder in encoders:
         ndcg_tasks = 0.0
-        for task in benchmark:
+        for task in benchmark.tasks:
             print(f"Results for task: {task.task_id.upper()}")
             model = AutoIndex.from_config(encoder, task, args)
             _add_index_path(index_paths, model)

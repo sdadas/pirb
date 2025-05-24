@@ -12,12 +12,13 @@ from typing import List, Dict, Optional
 
 from sklearn.metrics import ndcg_score
 
+from search.hybrid import RerankerHybrid
 from utils.system import set_java_env
 set_java_env()
 from tqdm import tqdm
 from transformers import HfArgumentParser, AutoTokenizer, AutoModelForSeq2SeqLM
 from data import RawJsonlTask, IndexInput, RetrievalTask, IndexResult
-from search import SearchIndex, AutoIndex, RerankerHybrid
+from search import SearchIndex, AutoIndex
 
 
 FLAN_PRP_PROMPT = '''Question: Given a query "{0}", which of the following two passages is more relevant to the query?
