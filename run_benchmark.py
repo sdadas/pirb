@@ -64,10 +64,6 @@ class BenchmarkArgs:
         default="full",
         metadata={"help": "Scope of benchmark to run: full, small (only datasets <100MB), tiny (only datasets <20MB)"},
     )
-    raw_mode: bool = field(
-        default=True,
-        metadata={"help": "Use raw vector operations instead of FAISS index"},
-    )
     overwrite: bool = field(
         default=False,
         metadata={"help": "Overwrite any cache or results even if exists"}

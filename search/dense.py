@@ -2,19 +2,16 @@ import logging
 import math
 import os.path
 import random
-from collections import defaultdict
 from functools import partial
 from typing import List, Iterable, Dict, Optional, Union, Any, Callable
-import faiss
 import numpy as np
 import torch
-from joblib import load
 from sentence_transformers import SentenceTransformer
-from sentence_transformers.util import semantic_search
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer, AutoTokenizer
 from multiprocessing import Pool
-from data import IndexInput, IndexResult
+from backend import IndexBackend
+from data import IndexInput
 from search.base import SearchIndex, patch_sentence_transformer
 
 
@@ -207,6 +204,7 @@ class TextAveragingEncoder:
                 doc_res = np.mean(doc_emb, axis=0)
                 norm = np.linalg.norm(doc_res)
                 if norm != 0:
+                    # noinspection PyTypeChecker
                     doc_res = doc_res / norm
             res.append(doc_res)
         return torch.vstack(res) if convert_to_tensor else np.vstack(res)
@@ -214,7 +212,7 @@ class TextAveragingEncoder:
 
 class DenseIndex(SearchIndex):
 
-    def __init__(self, data_dir: str, encoder: Dict, use_bettertransformer=False, raw_mode=True):
+    def __init__(self, data_dir: str, encoder: Dict, use_bettertransformer=False):
         self._st_bs = encoder.get("batch_size", 32)
         self._averaging = encoder.get("enable_averaging", False)
         self.data_dir = data_dir
@@ -224,10 +222,8 @@ class DenseIndex(SearchIndex):
         if self._averaging:
             self.index_name += "_averaging"
         self.index_dir = os.path.join(self.data_dir, self.index_name)
-        self.index_vectors_path = os.path.join(self.index_dir, "index.bin")
-        self.index_ids_path = os.path.join(self.index_dir, "ids.bin")
+        self.backend = self._create_backend(encoder)
         self.normalize = encoder.get("normalize", True)
-        self.raw_mode = raw_mode
         self.use_bettertransformer = use_bettertransformer
         self.encoder_spec = encoder
         self.query_prefix: Optional[str] = encoder.get("q_prefix", None)
@@ -235,8 +231,15 @@ class DenseIndex(SearchIndex):
         self.query_prefix_name: Optional[str] = encoder.get("q_prefix_name", None)
         self.passage_prefix_name: Optional[str] = encoder.get("p_prefix_name", None)
         self.encoder: Optional[SentenceTransformer] = None
-        self._ids = None
-        self._index = None
+
+    def _create_backend(self, encoder_spec: Dict):
+        backend = encoder_spec.get("backend", "raw")
+        if isinstance(backend, str):
+            return IndexBackend.from_config({"backend_type": backend, "index_dir": self.index_dir})
+        elif isinstance(backend, dict):
+            backend["index_dir"] = self.index_dir
+            return IndexBackend.from_config(backend)
+        raise AssertionError("'backend' arg accepts backend name or backend config as dict")
 
     def _load_encoder(self):
         if self.encoder is not None: return
@@ -254,6 +257,7 @@ class DenseIndex(SearchIndex):
         model_kwargs = {"torch_dtype": torch_dtype}
         model_kwargs.update(self.model_kwargs)
         trust = model_kwargs.get("trust_remote_code", True)
+        # noinspection PyArgumentList
         model = SentenceTransformer(self.encoder_spec["name"], trust_remote_code=trust, model_kwargs=model_kwargs)
         if self.encoder_spec.get("fp16", False):
             model.half()
@@ -275,7 +279,11 @@ class DenseIndex(SearchIndex):
         self.encoder = model
 
     def _encode_kwargs(self, query: bool) -> Dict:
-        kwargs = {"normalize_embeddings": self.normalize, "batch_size": self._st_bs, 'convert_to_tensor': self.raw_mode}
+        kwargs = {
+            "normalize_embeddings": self.normalize,
+            "batch_size": self._st_bs,
+            "convert_to_tensor": self.backend.supports_tensors()
+        }
         prefix = self.query_prefix if query else self.passage_prefix
         prefix_name = self.query_prefix_name if query else self.passage_prefix_name
         if prefix:
@@ -291,7 +299,7 @@ class DenseIndex(SearchIndex):
         return kwargs
 
     def exists(self) -> bool:
-        return os.path.exists(self.index_vectors_path) and os.path.exists(self.index_ids_path)
+        return self.backend.exists()
 
     def build(self, docs: Iterable[IndexInput]):
         if self.encoder is None:
@@ -313,19 +321,16 @@ class DenseIndex(SearchIndex):
             kwargs = self._encode_kwargs(query=False)
             batch_emb = self.encoder.encode(batch, **kwargs)
             idx += 1
-            if self.raw_mode:
+            if self.backend.supports_tensors():
                 embeddings.append(batch_emb.detach().cpu())
             else:
                 embeddings.append(batch_emb)
-        res = self.save_index(self.index_ids_path, self.index_vectors_path, ids, embeddings, self.raw_mode)
-        self._index = res
-        self._ids = ids
+        self.backend.build(embeddings, ids)
 
     def search(self, queries: List[IndexInput], k: int, batch_size=1024, verbose=True, cache_prefix=None,
                overwrite=False) -> Dict:
         results = self.load_results_from_cache(k, cache_prefix) if not overwrite else None
         if results is not None: return results
-        if self._ids is None or self._index is None: self._open_index()
         if self.encoder is None: self._load_encoder()
         results = {}
         for i in tqdm(range(0, len(queries), batch_size), desc="Searching in dense index", disable=not verbose):
@@ -340,49 +345,20 @@ class DenseIndex(SearchIndex):
         qids = [val.id for val in batch]
         kwargs = self._encode_kwargs(query=True)
         emb = self.encoder.encode(texts, show_progress_bar=False, **kwargs)
-        return self._search_in_memory(emb, qids, top_k) if self.raw_mode else self._search_in_faiss(emb, qids, top_k)
-
-    def _search_in_memory(self, emb, qids, top_k):
-        emb = emb.detach().cpu().float()
-        results = defaultdict(list)
-        hits = semantic_search(emb, self._index, query_chunk_size=128, top_k=top_k)
-        for i, qid in enumerate(qids):
-            query_hits = hits[i]
-            for k in range(top_k):
-                hit = query_hits[k]
-                docid = self._ids[int(hit["corpus_id"])]
-                score = hit["score"]
-                results[qid].append(IndexResult(docid, score))
-        return results
-
-    def _search_in_faiss(self, emb, qids, top_k):
-        results = defaultdict(list)
-        sim, indices = self._index.search(emb, top_k)
-        sim = sim.tolist()
-        indices = indices.tolist()
-        for i, qid in enumerate(qids):
-            for k in range(top_k):
-                idx = indices[i][k]
-                docid = self._ids[idx]
-                score = sim[i][k]
-                results[qid].append(IndexResult(docid, score))
-        return results
-
-    def _open_index(self):
-        if self.raw_mode:
-            self._index = torch.load(self.index_vectors_path).float()
-        else:
-            self._index = faiss.read_index(self.index_vectors_path)
-        self._ids = load(self.index_ids_path)
+        return self.backend.search(emb, qids, top_k)
 
     def name(self):
         return f"dense_{self.index_name}"
 
     def __len__(self):
-        return len(self._ids) if self._ids is not None else 0
+        return 0
 
     def model_dict(self) -> Dict:
         return self.encoder_spec
 
     def index_path(self) -> str:
         return self.index_dir
+
+    def __del__(self):
+        if hasattr(self, "backend") and self.backend is not None:
+            self.backend.close()

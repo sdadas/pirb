@@ -11,7 +11,6 @@ class AutoIndex:
         index_name = config["name"]
         index_type = config.get("type", None)
         use_bt = args.use_bettertransformer if hasattr(args, "use_bettertransformer") else False
-        raw_mode = args.raw_mode if hasattr(args, "raw_mode") else True
         tasks_config = config.get("tasks", None)
         if tasks_config is not None and isinstance(tasks_config, dict):
             task_overrides = tasks_config.get(task.task_id, None)
@@ -36,4 +35,4 @@ class AutoIndex:
             return LuceneIndex(cache_dir, lang, args.threads)
         else:
             from .dense import DenseIndex
-            return DenseIndex(data_dir=cache_dir, encoder=config, use_bettertransformer=use_bt, raw_mode=raw_mode)
+            return DenseIndex(data_dir=cache_dir, encoder=config, use_bettertransformer=use_bt)

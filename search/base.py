@@ -5,10 +5,6 @@ import os.path
 import re
 from abc import ABC
 from typing import List, Iterable, Dict, Optional, Tuple
-import faiss
-import numpy as np
-import torch
-from joblib import dump
 from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedTokenizer
 
@@ -86,21 +82,6 @@ class SearchIndex(ABC):
         if os.path.exists(output_path):
             os.remove(output_path)
         os.rename(tmp_path, output_path)
-
-    def save_index(self, index_ids_path, index_vectors_path, ids, embeddings, raw_mode):
-        if raw_mode:
-            res = torch.vstack(embeddings)
-            torch.save(res, index_vectors_path)
-            dump(ids, index_ids_path)
-            res = res.float()
-        else:
-            embeddings = np.vstack(embeddings)
-            dim = embeddings.shape[1]
-            res = faiss.IndexFlatIP(dim)
-            res.add(embeddings)
-            faiss.write_index(res, index_vectors_path)
-            dump(ids, index_ids_path)
-        return res
 
     def accumulate_stats(self, stats: Dict):
         pass
