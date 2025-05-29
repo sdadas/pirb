@@ -44,10 +44,6 @@ class BenchmarkArgs:
         default=100,
         metadata={"help": "Number of hits for Recall score"},
     )
-    threads: int = field(
-        default=8,
-        metadata={"help": "Number of threads to use for indexing and searching Lucene"},
-    )
     data_dir: str = field(
         default="data",
         metadata={"help": "Directory where task data is stored"},

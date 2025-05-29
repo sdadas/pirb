@@ -28,11 +28,12 @@ class AutoIndex:
             return HybridIndex(args.data_dir, index_name, indices, k0, strategy, task, rerank_limit, use_bt)
         elif index_type == "splade":
             from .splade import SpladeIndex
-            return SpladeIndex(config, data_dir=cache_dir, use_bettertransformer=use_bt, threads=args.threads)
+            return SpladeIndex(config, data_dir=cache_dir, use_bettertransformer=use_bt)
         elif index_name in ("sparse", "bm25"):
             from .lucene import LuceneIndex
             lang = config.get("lang", "pl")
-            return LuceneIndex(cache_dir, lang, args.threads)
+            threads = config.get("threads", 8)
+            return LuceneIndex(cache_dir, lang, threads)
         else:
             from .dense import DenseIndex
             return DenseIndex(data_dir=cache_dir, encoder=config, use_bettertransformer=use_bt)

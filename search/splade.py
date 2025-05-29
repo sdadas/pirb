@@ -1,17 +1,15 @@
 import json
-import json
 import logging
 import os.path
 import shutil
 from typing import List, Iterable, Dict, Optional, TextIO
 import numpy as np
 import torch
-from jnius import autoclass
 from pyserini.encode import QueryEncoder
-from pyserini.search import LuceneImpactSearcher
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForMaskedLM, BatchEncoding
-from data import IndexInput, IndexResult
+from backend import IndexBackend, SparseBackend
+from data import IndexInput
 from search.base import SearchIndex
 
 
@@ -24,20 +22,26 @@ class SpladeEncoder(QueryEncoder):
         self.use_bettertransformer = use_bettertransformer
         self.model_name_or_path = config["name"]
         self.maxlen = config.get("max_seq_length", 512)
+        self.model_kwargs = config.get("model_kwargs", {})
         self.tokenizer, self.model = self._init_tokenizer_and_model()
         self.vocab = {v: k for k, v in self.tokenizer.get_vocab().items()}
         self.queries_cache = {}
 
     def _init_tokenizer_and_model(self):
+        torch_dtype = torch.float32
+        if self.config.get("fp16", False):
+            torch_dtype = torch.float16
+        elif self.config.get("bf16", False):
+            torch_dtype = torch.bfloat16
+        model_kwargs = {"torch_dtype": torch_dtype}
+        model_kwargs.update(self.model_kwargs)
         tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path)
-        model = AutoModelForMaskedLM.from_pretrained(self.model_name_or_path).to(self.device)
+        model = AutoModelForMaskedLM.from_pretrained(self.model_name_or_path, **model_kwargs).to(self.device)
         tokenizer.model_max_length = self.maxlen
         if self.use_bettertransformer:
             from optimum.bettertransformer import BetterTransformer
             model = BetterTransformer.transform(model)
         model.eval()
-        if self.config.get("fp16", False):
-            model.half()
         return tokenizer, model
 
     def encode_batch(self, batch: List[str]):
@@ -70,15 +74,21 @@ class SpladeEncoder(QueryEncoder):
                 dict_splade[real_token] = int(value_token)
         return dict_splade
 
-    def encode_queries(self, queries: List[str], batch_size: int):
+    def encode_queries(self, queries: List[str], batch_size: int, query_ids: List[str] = None):
+        if query_ids is None:
+            query_ids = queries
         cached = {}
+        results = {}
         for i in range(0, len(queries), batch_size):
             batch = queries[i:i + batch_size]
+            ids_batch = query_ids[i:i + batch_size]
             encoded = self.encode_batch(batch).cpu().numpy()
             outputs = self._output_to_weight_dicts(encoded)
             assert len(batch) == len(outputs)
             cached.update({text: output for text, output in zip(batch, outputs)})
+            results.update({qid: output for qid, output in zip(ids_batch, outputs)})
         self.queries_cache = cached
+        return results
 
     def _output_to_weight_dicts(self, batch_aggregated_logits: torch.Tensor, max_clauses: int = 1024):
         to_return = []
@@ -99,7 +109,7 @@ class SpladeEncoder(QueryEncoder):
 
 class SpladeIndex(SearchIndex):
 
-    def __init__(self, config: Dict, data_dir: str, threads: int, use_bettertransformer: bool = False):
+    def __init__(self, config: Dict, data_dir: str, use_bettertransformer: bool = False):
         self.batch_size = 32
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.config = config
@@ -107,25 +117,48 @@ class SpladeIndex(SearchIndex):
         self.model_name_or_path = config["name"]
         self.index_name = self.model_name_or_path.replace("/", "_").replace(".", "_")
         self.base_dir = os.path.join(self.data_dir, self.index_name)
-        self.index_dir = os.path.join(self.base_dir, 'lucene_index')
+        self.index_dir = os.path.join(self.base_dir, f"{self._get_backend_name(config)}_index")
         self.use_bettertransformer = use_bettertransformer
-        self.threads = threads
+        self.quantization_factor = config.get("quantization_factor", 100)
+        self.threads = config.get("threads", 8)
+        self.backend = self._create_backend(config)
         self.encoder: Optional[SpladeEncoder] = None
         self.searcher = None
 
-    def _init_encoder(self):
-        self.encoder = SpladeEncoder(self.config, self.use_bettertransformer)
+    def _get_backend_name(self, config: Dict):
+        backend = config.get("backend", "lucene")
+        # noinspection PyTypeChecker
+        return backend if isinstance(backend, str) else backend["backend_type"]
+
+    def _create_backend(self, config: Dict) -> SparseBackend:
+        backend = config.get("backend", "lucene")
+        if isinstance(backend, str):
+            backend = {"backend_type": backend, "index_dir": self.index_dir}
+        elif isinstance(backend, dict):
+            backend["index_dir"] = self.index_dir
+        else:
+            raise AssertionError("'backend' arg accepts backend name or backend config as dict")
+        if backend["backend_type"] == "lucene":
+            # noinspection PyTypeChecker
+            backend["encoder_provider"] = self._get_encoder
+        return IndexBackend.from_config(backend)
+
+    def _get_encoder(self):
+        if self.encoder is None:
+            self.encoder = SpladeEncoder(self.config, self.use_bettertransformer, self.quantization_factor)
+        return self.encoder
 
     def exists(self) -> bool:
-        return os.path.exists(self.index_dir)
+        return self.backend.exists()
 
     def build(self, docs: Iterable[IndexInput]):
         if self.exists(): shutil.rmtree(self.index_dir)
-        if self.encoder is None: self._init_encoder()
+        if self.encoder is None: self._get_encoder()
         docs_dir = os.path.join(self.base_dir, "docs")
+        docs_path = os.path.join(docs_dir, "passages.jsonl")
         os.makedirs(docs_dir, exist_ok=True)
         logging.info("Building splade vectors index %s", self.index_dir)
-        with open(os.path.join(docs_dir, "passages.jsonl"), "w", encoding='utf-8') as docs_file:
+        with open(docs_path, "w", encoding='utf-8') as docs_file:
             with torch.no_grad():
                 batch = []
                 for doc in docs:
@@ -136,18 +169,7 @@ class SpladeIndex(SearchIndex):
                 if len(batch) > 0:
                     self._write_batch(batch, docs_file)
         os.makedirs(self.index_dir, exist_ok=True)
-        args = [
-            "-collection", "JsonVectorCollection",
-            "-input", os.path.abspath(docs_dir),
-            "-index", os.path.abspath(self.index_dir),
-            "-threads", str(self.threads),
-            "-generator", "DefaultLuceneDocumentGenerator",
-            "-impact",
-            "-pretokenized",
-            "-storeDocvectors"
-        ]
-        JIndexCollection = autoclass('io.anserini.index.IndexCollection')
-        JIndexCollection.main(args)
+        self.backend.build(docs_path)
 
     def _write_batch(self, batch: List[IndexInput], output: TextIO):
         texts = [val.text for val in batch]
@@ -163,25 +185,18 @@ class SpladeIndex(SearchIndex):
     def search(self, queries: List[IndexInput], k: int, batch_size=1024, verbose=True, cache_prefix=None, overwrite=False) -> Dict:
         results = self.load_results_from_cache(k, cache_prefix) if not overwrite else None
         if results is not None: return results
-        if self.searcher is None: self._open_searcher()
+        if self.encoder is None: self._get_encoder()
         results = {}
         for i in tqdm(range(0, len(queries), batch_size), desc="Searching in splade index", disable=not verbose):
             batch: List[IndexInput] = queries[i:i + batch_size]
             texts = [val.text for val in batch]
             ids = [val.id for val in batch]
             with torch.no_grad():
-                self.encoder.encode_queries(texts, batch_size=self.batch_size)
-            batch_results = self.searcher.batch_search(texts, ids, k=k, threads=self.threads)
-            for qid, relevant in batch_results.items():
-                batch_results[qid] = [IndexResult(val.docid, val.score) for val in relevant]
+                encoded_texts = self.encoder.encode_queries(texts, batch_size=self.batch_size, query_ids=ids)
+            batch_results = self.backend.search(texts, encoded_texts, ids, top_k=k)
             results.update(batch_results)
         self.save_results_to_cache(k, cache_prefix, results)
         return results
-
-    def _open_searcher(self):
-        if self.encoder is None: self._init_encoder()
-        searcher = LuceneImpactSearcher(self.index_dir, self.encoder)
-        self.searcher = searcher
 
     def name(self):
         return f"splade_{self.index_name}"
@@ -195,4 +210,6 @@ class SpladeIndex(SearchIndex):
     def index_path(self) -> str:
         return self.index_dir
 
-
+    def __del__(self):
+        if hasattr(self, "backend") and self.backend is not None:
+            self.backend.close()
