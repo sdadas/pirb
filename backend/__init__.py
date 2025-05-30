@@ -1,6 +1,5 @@
 from typing import Dict, Union
 from backend.base import DenseBackend, SparseBackend
-from backend.sparse_seismic import SeismicBackend
 
 
 class IndexBackend:
@@ -26,5 +25,6 @@ class IndexBackend:
             threads = config.get("threads", 8)
             return LuceneBackend(index_dir, encoder_provider, threads)
         elif backend_type == "seismic":
+            from backend.sparse_seismic import SeismicBackend
             return SeismicBackend(index_dir)
         raise AssertionError("Unknown backend type: {}".format(backend_type))

@@ -56,10 +56,6 @@ class HardNegsArgs:
         default="cache2",
         metadata={"help": "Directory where indexes and cached results are stored"},
     )
-    threads: int = field(
-        default=8,
-        metadata={"help": "Number of threads to use for indexing and searching Lucene"},
-    )
     use_bettertransformer: bool = field(
         default=True,
         metadata={"help": "Patch dense encoders with BetterTransformer optimizations"},
