@@ -70,6 +70,8 @@ class RawVectorsBackend(DenseBackend):
         self._ids = ids
 
     def search(self, embeddings, qids: List[str], top_k: int) -> Dict[str, List[IndexResult]]:
+        if self._index is None or self._ids is None:
+            self.open()
         embeddings = embeddings.detach().cpu().float()
         results = defaultdict(list)
         hits = semantic_search(embeddings, self._index, query_chunk_size=128, top_k=top_k)
