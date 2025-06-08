@@ -1,0 +1,51 @@
+[
+  {
+    "name": "Qwen/Qwen3-Embedding-8B",
+    "bf16": true,
+    "q_prefix": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
+    "max_seq_length": 8192,
+    "padding_side": "left",
+    "batch_size": 16,
+    "model_kwargs": {
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    },
+    "tasks": {
+      "arguana-pl": {
+        "q_prefix": "Instruct: Given a claim, find documents that refute the claim\nQuery: ",
+        "p_prefix": "Instruct: Given a claim, find documents that refute the claim\nQuery: "
+      },
+      "quora-pl": {
+        "q_prefix": "Instruct: Given a question, retrieve questions that are semantically equivalent to the given question\nQuery: ",
+        "p_prefix": "Instruct: Given a question, retrieve questions that are semantically equivalent to the given question\nQuery: "
+      },
+      "dbpedia-pl": {
+        "q_prefix": "Instruct: Given a query, retrieve relevant entity descriptions from DBPedia\nQuery: "
+      },
+      "fiqa-pl": {
+        "q_prefix": "Instruct: Given a financial question, retrieve user replies that best answer the question\nQuery: "
+      },
+      "hotpotqa-pl": {
+        "q_prefix": "Instruct: Given a multi-hop question, retrieve documents that can help answer the question\nQuery: "
+      },
+      "msmarco-pl": {
+        "q_prefix": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: "
+      },
+      "nfcorpus-pl": {
+        "q_prefix": "Instruct: Given a question, retrieve relevant documents that best answer the question\nQuery: "
+      },
+      "nq-pl": {
+        "q_prefix": "Instruct: Given a question, retrieve Wikipedia passages that answer the question\nQuery: "
+      },
+      "scidocs-pl": {
+        "q_prefix": "Instruct: Given a scientific paper title, retrieve paper abstracts that are cited by the given paper\nQuery: "
+      },
+      "scifact-pl": {
+        "q_prefix": "Instruct: Given a scientific claim, retrieve documents that support or refute the claim\nQuery: "
+      },
+      "trec-covid-pl": {
+        "q_prefix": "Instruct: Given a query on COVID-19, retrieve documents that answer the query\nQuery: "
+      }
+    }
+  }
+]
