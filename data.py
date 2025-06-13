@@ -519,6 +519,69 @@ class LocalMSMarcoTask(RetrievalTask):
                 passages.append(passage)
         return passages
 
+class AIRBenchTask(RetrievalTask):
+    def __init__(self, task_type: str, domain:str, dataset_name="default", lang="en", version="AIR-Bench_24.05", split="dev"):
+        super().__init__(f"airbench-{task_type}-{domain}-{dataset_name}-{lang}-{version}", "airbench")
+        self.domain = domain
+        self.lang = lang
+        self.version = version
+        self.task_type = task_type
+        self.split = split
+        self.dataset_name = dataset_name.replace('-', '_')
+
+
+    def prepare_task(self, data_dir: str):
+        if self.exists(data_dir): return
+        passages_path = self.passages_path(data_dir)
+        queries_path = self.queries_path(data_dir)
+        logging.info("Preparing task %s-%s-%s", self.task_type, self.domain, self.lang)
+        queries = self._read_queries()
+        self.write_file(queries_path, queries)
+        passages = self._read_passages()
+        self.write_file(passages_path, passages)
+
+    def _read_qrels(self):
+        qrels_data = load_dataset(
+            f'AIR-Bench/qrels-{self.task_type}_{self.domain}_{self.lang}-dev',
+            self.version,
+            split=f"qrels_{self.dataset_name}_{self.split}" if self.version != 'AIR-Bench_24.04' else f"qrels_{self.dataset_name}"
+        )
+        qrels = {}
+        for data in qrels_data:
+            qid = data['qid']
+            if qid not in qrels:
+                qrels[qid] = []
+            if data['relevance'] == 1:
+                qrels[qid].append(data['docid'])
+        return qrels
+
+    def _read_queries(self):
+        qrels = self._read_qrels()
+        queries_data = load_dataset(
+            f'AIR-Bench/{self.task_type}_{self.domain}_{self.lang}',
+            self.version,
+            split=f"queries_{self.dataset_name}_{self.split}" if self.version != 'AIR-Bench_24.04' else f"queries_{self.dataset_name}"
+        )
+        queries = []
+        for data in queries_data:
+            qid = data['id']
+            if qid in qrels:
+                q = data['text'].replace("\n", " ").replace("\t", " ")
+                query = {"id": qid, "contents": q, "relevant": qrels[qid]}
+                queries.append(query)
+        return queries
+
+    def _read_passages(self):
+        passages = []
+        passages_data = load_dataset(
+            f'AIR-Bench/{self.task_type}_{self.domain}_{self.lang}',
+            self.version,
+            split=f"corpus_{self.dataset_name}",
+        )
+        for data in passages_data:
+            passages.append({"id": data["id"], "contents": data["text"]})
+        return passages
+
 
 class Benchmark:
 
@@ -554,7 +617,7 @@ class Benchmark:
         assert isinstance(config, list), "Benchmark config should include a list of task definitions"
         cls_map = {
             "raw": RawJsonlTask, "maupqa": MAUPQATask, "poleval": PolEvalTask, "beir": BEIRTask,
-            "mfaq": MFAQTask, "gpt-exams": GPTExamsTask, "polqa": POLQATask
+            "mfaq": MFAQTask, "gpt-exams": GPTExamsTask, "polqa": POLQATask, "airbench": AIRBenchTask
         }
         tasks = []
         for task_config in config:
