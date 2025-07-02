@@ -200,6 +200,78 @@ class Seq2SeqReranker(Reranker):
         return self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
 
 
+class Qwen3Reranker(Reranker):
+
+    def __init__(self, **kwargs):
+        self.reranker_name = kwargs["reranker_name"]
+        self.torch_dtype = torch.float32
+        if kwargs.get("bf16", False):
+            self.torch_dtype = torch.bfloat16
+        elif kwargs.get("fp16", False):
+            self.torch_dtype = torch.float16
+        self.max_length = kwargs.get("max_seq_length", 8192)
+        self.prompt = kwargs.get("prompt", None)
+        if self.prompt is not None:
+            logging.info(f"Using custom prompt: '{self.prompt}'")
+        else:
+            self.prompt = "Given a web search query, retrieve relevant passages that answer the query"
+        model, tokenizer = self._load_model()
+        self.model = model
+        self.tokenizer = tokenizer
+        self.token_false_id = tokenizer.convert_tokens_to_ids("no")
+        self.token_true_id = tokenizer.convert_tokens_to_ids("yes")
+        prefix_tokens, suffix_tokens = self._get_prefix_suffix()
+        self.prefix_tokens = prefix_tokens
+        self.suffix_tokens = suffix_tokens
+
+    def _get_prefix_suffix(self):
+        system_msg = ("Judge whether the Document meets the requirements based on the Query and the Instruct provided. "
+                      "Note that the answer can only be \"yes\" or \"no\".")
+        prefix = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n"
+        suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        prefix_tokens = self.tokenizer.encode(prefix, add_special_tokens=False)
+        suffix_tokens = self.tokenizer.encode(suffix, add_special_tokens=False)
+        return prefix_tokens, suffix_tokens
+
+    def _load_model(self):
+        from transformers import AutoModelForCausalLM
+        model = AutoModelForCausalLM.from_pretrained(
+            self.reranker_name, torch_dtype=self.torch_dtype, attn_implementation="flash_attention_2", device_map="cuda"
+        ).eval()
+        tokenizer = AutoTokenizer.from_pretrained(self.reranker_name, padding_side="left")
+        return model, tokenizer
+
+    def format_instruction(self, query: str, doc: str):
+        return f"<Instruct>: {self.prompt}\n<Query>: {query}\n<Document>: {doc}"
+
+    def process_inputs(self, pairs: List[str]):
+        inputs = self.tokenizer(
+            pairs, padding=False, truncation="longest_first",
+            return_attention_mask=False, max_length=self.max_length - len(self.prefix_tokens) - len(self.suffix_tokens)
+        )
+        for i, ele in enumerate(inputs["input_ids"]):
+            inputs["input_ids"][i] = self.prefix_tokens + ele + self.suffix_tokens
+        inputs = self.tokenizer.pad(inputs, padding=True, return_tensors="pt", max_length=self.max_length)
+        for key in inputs:
+            inputs[key] = inputs[key].to(self.model.device)
+        return inputs
+
+    def compute_logits(self, inputs):
+        with torch.no_grad():
+            batch_scores = self.model(**inputs).logits[:, -1, :]
+            true_vector = batch_scores[:, self.token_true_id]
+            false_vector = batch_scores[:, self.token_false_id]
+            batch_scores = torch.stack([false_vector, true_vector], dim=1)
+            batch_scores = torch.nn.functional.log_softmax(batch_scores, dim=1)
+            scores = batch_scores[:, 1].exp().tolist()
+        return scores
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        pairs = [self.format_instruction(query, doc) for query, doc in zip(queries, docs)]
+        inputs = self.process_inputs(pairs)
+        return self.compute_logits(inputs)
+
+
 class FlagReranker(Reranker):
 
     def __init__(self, **kwargs):
@@ -266,8 +338,10 @@ class JinaReranker(Reranker):
 
     def _load_model(self):
         dtype = "auto"
-        if self.use_bf16: dtype = torch.bfloat16
-        elif self.use_fp16: dtype = torch.float16
+        if self.use_bf16:
+            dtype = torch.bfloat16
+        elif self.use_fp16:
+            dtype = torch.float16
         model = AutoModelForSequenceClassification.from_pretrained(
             self.reranker_name,
             torch_dtype=dtype,
@@ -297,8 +371,10 @@ class MixedbreadReranker(Reranker):
     def _load_model(self):
         from mxbai_rerank import MxbaiRerankV2
         dtype = "auto"
-        if self.use_bf16: dtype = torch.bfloat16
-        elif self.use_fp16: dtype = torch.float16
+        if self.use_bf16:
+            dtype = torch.bfloat16
+        elif self.use_fp16:
+            dtype = torch.float16
         model = MxbaiRerankV2(self.reranker_name, device="cuda", torch_dtype=dtype, max_length=self.max_length)
         return model
 
@@ -324,7 +400,7 @@ class RerankerHybrid(HybridStrategy):
         reranker_type = self.args.get("reranker_type", "classifier")
         reranker_name = self.args['reranker_name']
         assert reranker_type in (
-            "classifier", "seq2seq", "flag_classifier", "jina", "mixedbread",
+            "classifier", "seq2seq", "flag_classifier", "jina", "mixedbread", "qwen3",
             "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm"
         )
         logging.info(f"Loading {reranker_type} reranker {reranker_name}")
@@ -338,6 +414,8 @@ class RerankerHybrid(HybridStrategy):
             self.reranker = JinaReranker(**self.args)
         elif reranker_type == "mixedbread":
             self.reranker = MixedbreadReranker(**self.args)
+        elif reranker_type == "qwen3":
+            self.reranker = Qwen3Reranker(**self.args)
 
     def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         if self.reranker is None:

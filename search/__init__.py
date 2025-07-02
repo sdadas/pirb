@@ -1,3 +1,5 @@
+import copy
+from typing import Any
 from .base import *
 from data import RetrievalTask
 
@@ -15,9 +17,12 @@ class AutoIndex:
         if tasks_config is not None and isinstance(tasks_config, dict):
             task_overrides = tasks_config.get(task.task_id, None)
             if task_overrides is not None and isinstance(task_overrides, dict):
-                config = dict(config)
+                config = copy.deepcopy(config)
                 for key, val in task_overrides.items():
-                    config[key] = val
+                    if "." in key:
+                        AutoIndex.set_nested_value(config, key, val)
+                    else:
+                        config[key] = val
         if index_type == "hybrid":
             from .hybrid import HybridIndex
             child_configs = config["models"]
@@ -37,3 +42,10 @@ class AutoIndex:
         else:
             from .dense import DenseIndex
             return DenseIndex(data_dir=cache_dir, encoder=config, use_bettertransformer=use_bt)
+
+    @staticmethod
+    def set_nested_value(d: Dict, key: str, value: Any):
+        keys = key.split('.')
+        for k in keys[:-1]:
+            d = d.setdefault(k, {})
+        d[keys[-1]] = value
