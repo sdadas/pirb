@@ -1,0 +1,15 @@
+[
+  {"task_id": "NanoClimateFEVER", "type": "beir", "lang": "en"},
+  {"task_id": "NanoDBPedia", "type": "beir", "lang": "en"},
+  {"task_id": "NanoFEVER", "type": "beir", "lang": "en"},
+  {"task_id": "NanoFiQA2018", "type": "beir", "lang": "en"},
+  {"task_id": "NanoHotpotQA", "type": "beir", "lang": "en"},
+  {"task_id": "NanoMSMARCO", "type": "beir", "lang": "en"},
+  {"task_id": "NanoNFCorpus", "type": "beir", "lang": "en"},
+  {"task_id": "NanoNQ", "type": "beir", "lang": "en"},
+  {"task_id": "NanoQuoraRetrieval", "type": "beir", "lang": "en", "skip_self": true},
+  {"task_id": "NanoSCIDOCS", "type": "beir", "lang": "en"},
+  {"task_id": "NanoArguAna", "type": "beir", "lang": "en", "skip_self": true},
+  {"task_id": "NanoSciFact", "type": "beir", "lang": "en"},
+  {"task_id": "NanoTouche2020", "type": "beir", "lang": "en"}
+]

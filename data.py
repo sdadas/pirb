@@ -175,16 +175,21 @@ class BEIRTask(RetrievalTask):
         passages_path = self.passages_path(data_dir)
         queries_path = self.queries_path(data_dir)
         logging.info("Preparing task %s", self.task_id)
-        user_name = "clarin-knext" if self.lang == "pl" else "BeIR"
+        nano = self.task_id.lower().startswith("nano")
+        user_name = "clarin-knext"
+        if self.lang == "en":
+            user_name = "zeta-alpha-ai" if nano else "BeIR"
         dataset_name = f"{user_name}/{self.task_id}"
-        self._write_passages(dataset_name, passages_path)
-        self._write_queries(dataset_name, queries_path)
+        self._write_passages(dataset_name, passages_path, nano)
+        self._write_queries(dataset_name, queries_path, nano)
 
-    def _write_passages(self, dataset_name: str, output_path: str):
-        passages = load_dataset(dataset_name, name="corpus", split="corpus")
+    def _write_passages(self, dataset_name: str, output_path: str, nano: bool = False):
+        passages = load_dataset(dataset_name, name="corpus", split="train" if nano else "corpus")
         with open(output_path, "w", encoding="utf-8") as out:
             for row in passages:
-                title = row.get("title").replace("\n", " ").replace("\r", " ").strip()
+                title = ""
+                if "title" in row:
+                    title = row.get("title").replace("\n", " ").replace("\r", " ").strip()
                 text = row.get("text").replace("\n", " ").replace("\r", " ")
                 pid = row.get("_id")
                 if len(title) > 0:
@@ -192,8 +197,8 @@ class BEIRTask(RetrievalTask):
                 out.write(json.dumps({"id": pid, "contents": text}, ensure_ascii=False))
                 out.write("\n")
 
-    def _write_queries(self, dataset_name: str, output_path: str):
-        queries = load_dataset(dataset_name, name="queries", split="queries")
+    def _write_queries(self, dataset_name: str, output_path: str, nano: bool = False):
+        queries = load_dataset(dataset_name, name="queries", split="train" if nano else "queries")
         results = {}
         for row in queries:
             text = row.get("text").replace("\n", " ").replace("\r", " ")
@@ -201,10 +206,14 @@ class BEIRTask(RetrievalTask):
             res = {"id": qid, "contents": text, "relevant": []}
             results[qid] = res
         qrels_dataset = dataset_name + "-qrels"
-        for eval_split in self.splits:
-            qrels = load_dataset(qrels_dataset, split=eval_split)
+        splits = ("train",) if nano else self.splits
+        for eval_split in splits:
+            if nano:
+                qrels = load_dataset(dataset_name, name="qrels", split=eval_split)
+            else:
+                qrels = load_dataset(qrels_dataset, split=eval_split)
             for qrel in qrels:
-                score = qrel.get("score")
+                score = qrel.get("score") if "score" in qrel else 1
                 qid = str(qrel.get('query-id'))
                 pid = str(qrel.get("corpus-id"))
                 query = results.get(qid)
