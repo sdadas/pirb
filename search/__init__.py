@@ -39,6 +39,9 @@ class AutoIndex:
             lang = config.get("lang", "pl")
             threads = config.get("threads", 8)
             return LuceneIndex(cache_dir, lang, threads)
+        elif index_type == "late_interaction":
+            from .late_interaction import LateInteractionIndex
+            return LateInteractionIndex(data_dir=cache_dir, encoder=config)
         else:
             from .dense import DenseIndex
             return DenseIndex(data_dir=cache_dir, encoder=config, use_bettertransformer=use_bt)

@@ -1,0 +1,14 @@
+[
+  {
+    "name": "jinaai/jina-colbert-v2",
+    "type": "late_interaction",
+    "backend_type": "plaid",
+    "fp16": true,
+    "q_prefix": "[QueryMarker]",
+    "p_prefix": "[DocumentMarker]",
+    "batch_size": 16,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  }
+]

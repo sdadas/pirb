@@ -1,11 +1,14 @@
 from typing import Dict, Union
-from backend.base import DenseBackend, SparseBackend
+
+from pylate.indexes import PLAID
+
+from backend.base import DenseBackend, SparseBackend, LateInteractionBackend
 
 
 class IndexBackend:
 
     @staticmethod
-    def from_config(config: Dict) -> Union[DenseBackend, SparseBackend]:
+    def from_config(config: Dict) -> Union[DenseBackend, SparseBackend, LateInteractionBackend]:
         backend_type = config["backend_type"]
         index_dir = config["index_dir"]
         if backend_type == "faiss":
@@ -27,4 +30,10 @@ class IndexBackend:
         elif backend_type == "seismic":
             from backend.sparse_seismic import SeismicBackend
             return SeismicBackend(index_dir)
+        elif backend_type == "plaid":
+            from backend.late_interaction import PlaidBackend
+            return PlaidBackend(index_dir)
+        elif backend_type == "voyager":
+            from backend.late_interaction import VoyagerBackend
+            return VoyagerBackend(index_dir)
         raise AssertionError("Unknown backend type: {}".format(backend_type))
