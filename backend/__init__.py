@@ -1,7 +1,4 @@
 from typing import Dict, Union
-
-from pylate.indexes import PLAID
-
 from backend.base import DenseBackend, SparseBackend, LateInteractionBackend
 
 
