@@ -292,6 +292,12 @@ class DenseIndex(SearchIndex):
             kwargs["prompt_name"] = prefix_name
             if "jina-embeddings-v3" in self.index_name:
                 kwargs["task"] = prefix_name
+            elif "jina-embeddings-v4" in self.index_name:
+                if prefix_name in ("query", "passage"):
+                    kwargs["task"] = "retrieval"
+                elif prefix_name == "text-matching":
+                    kwargs["task"] = "text-matching"
+                    kwargs["prompt_name"] = None
         causal_fix = any(v in self.index_name.lower() for v in ("gte-qwen2", "inf-retriever", "qwen3-embedding"))
         if causal_fix and not isinstance(self.encoder, OpenAIEmbeddings):
             kwargs["is_causal"] = False
