@@ -1,0 +1,26 @@
+[
+  {
+    "name": "jinaai/jina-colbert-v2",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "jinaai/jina-colbert-v2",
+      "reranker_type": "pylate",
+      "batch_size": 32,
+      "bf16": true,
+      "colbert_kwargs": {
+        "query_prefix": "[QueryMarker]",
+        "document_prefix": "[DocumentMarker]",
+        "attend_to_expansion_tokens": true
+      }
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

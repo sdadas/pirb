@@ -1,13 +1,11 @@
 import logging
 import os
 from typing import Dict, Optional, List, Iterable
-
 import torch
-from sentence_transformers import SentenceTransformer
-
 from backend import IndexBackend
 from data import IndexInput, IndexResult
 from search import SearchIndex
+
 
 class ColBertEmbeddings:
 

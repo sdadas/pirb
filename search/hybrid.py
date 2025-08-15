@@ -5,6 +5,7 @@ import random
 import shutil
 import tempfile
 import time
+import weakref
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from typing import List, Iterable, Dict, Optional, Tuple, Union, Set, Callable
@@ -357,6 +358,75 @@ class JinaReranker(Reranker):
         return self.model.compute_score(pairs, batch_size=self.batch_size, max_length=self.max_length)
 
 
+class PylateReranker(Reranker):
+
+    def __init__(self, **kwargs):
+        self.reranker_name = kwargs["reranker_name"]
+        self.model_kwargs = kwargs.get("model_kwargs", {})
+        self.colbert_kwargs = kwargs.get("colbert_kwargs", {})
+        self.batch_size = kwargs.get("batch_size", 32)
+        self.torch_dtype = torch.float32
+        if kwargs.get("bf16", False):
+            self.torch_dtype = torch.bfloat16
+        elif kwargs.get("fp16", False):
+            self.torch_dtype = torch.float16
+        self.model_kwargs["torch_dtype"] = self.torch_dtype
+        self.model = self._load_model()
+        self.cache_path = tempfile.mkdtemp(prefix="pylate_cache")
+        weakref.finalize(self, shutil.rmtree, self.cache_path, ignore_errors=True)
+        self.cache = self._create_cache()
+
+    def _load_model(self):
+        from pylate.models import ColBERT
+        return ColBERT(
+            self.reranker_name,
+            **self.colbert_kwargs,
+            trust_remote_code=True,
+            device="cuda",
+            model_kwargs=self.model_kwargs
+        )
+
+    def _create_cache(self):
+        import diskcache as dc
+        return dc.Cache(
+            self.cache_path,
+            size_limit=10*1024**3,
+            eviction_policy="least-recently-used",
+            sqlite_mmap_size=2**30,
+            sqlite_cache_size=2**15
+        )
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        queries_cache = self._get_embeddings(queries, is_query=True)
+        docs_cache = self._get_embeddings(docs, is_query=False)
+        from pylate.scores import colbert_scores_pairwise
+        scores = []
+        for query, doc in zip(queries, docs):
+            query_emb = [queries_cache[query]]
+            doc_emb = [docs_cache[doc]]
+            score = colbert_scores_pairwise(torch.Tensor(query_emb), torch.Tensor(doc_emb))
+            scores.append(score.item())
+        return scores
+
+    def _get_embeddings(self, texts: List[str], is_query: bool):
+        prefix = "q_" if is_query else "p_"
+        cached = {text: self.cache[prefix + text] for text in set(texts) if (prefix + text) in self.cache}
+        uncached = list({text for text in texts if text not in cached})
+        if len(uncached) == 0:
+            return cached
+        embeddings = self.model.encode(
+            uncached,
+            batch_size=self.batch_size,
+            is_query=is_query,
+            show_progress_bar=False
+        )
+        for idx, text in enumerate(uncached):
+            emb = embeddings[idx]
+            self.cache[prefix + text] = emb
+            cached[text] = emb
+        return cached
+
+
 class MixedbreadReranker(Reranker):
 
     def __init__(self, **kwargs):
@@ -401,7 +471,7 @@ class RerankerHybrid(HybridStrategy):
         reranker_name = self.args['reranker_name']
         assert reranker_type in (
             "classifier", "seq2seq", "flag_classifier", "jina", "mixedbread", "qwen3",
-            "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm"
+            "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm", "pylate"
         )
         logging.info(f"Loading {reranker_type} reranker {reranker_name}")
         if reranker_type == "classifier":
@@ -416,6 +486,8 @@ class RerankerHybrid(HybridStrategy):
             self.reranker = MixedbreadReranker(**self.args)
         elif reranker_type == "qwen3":
             self.reranker = Qwen3Reranker(**self.args)
+        elif reranker_type == "pylate":
+            self.reranker = PylateReranker(**self.args)
 
     def merge_results(self, queries: List[IndexInput], index_results: List[Dict], k: int) -> Dict:
         if self.reranker is None:
