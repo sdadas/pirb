@@ -1,0 +1,12 @@
+[
+  {
+    "name": "openai/text-embedding-3-small",
+    "api_name": "text-embedding-3-small",
+    "type": "api",
+    "api_base": "https://api.openai.com/v1",
+    "api_key": "$OPENAI_KEY",
+    "model_max_length": 8192,
+    "batch_size": 32,
+    "threads": 20
+  }
+]

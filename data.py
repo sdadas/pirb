@@ -108,10 +108,10 @@ class RetrievalTask:
 
 class RawJsonlTask(RetrievalTask):
 
-    def __init__(self, task_id: str):
+    def __init__(self, task_id: str, skip_self: bool = False):
         super().__init__(task_id, "Web")
         self.symmetric_task = False
-        self.skip_self = False
+        self.skip_self = skip_self
 
     def prepare_task(self, data_dir: str):
         passages_path = os.path.join(data_dir, self.task_id, "passages/passages.jsonl")

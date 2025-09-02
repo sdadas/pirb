@@ -85,6 +85,8 @@ class OpenAIEmbeddings:
         self.api_name = config.get("api_name", self.model)
         self.api_base = config["api_base"]
         self.api_key = config.get("api_key", "-")
+        if self.api_key and self.api_key.startswith("$"):
+            self.api_key = os.environ[self.api_key[1:]]
         self.batch_size = config.get("batch_size", 32)
         self.tokenizer: Any = self._create_tokenizer(self.model)
         self.truncate_func: Callable = (

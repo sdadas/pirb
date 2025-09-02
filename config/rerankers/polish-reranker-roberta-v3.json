@@ -1,0 +1,26 @@
+[
+  {
+    "name": "sdadas/polish-reranker-roberta-v3",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "sdadas/polish-reranker-roberta-v3",
+      "reranker_type": "classifier",
+      "batch_size": 32,
+      "bf16": true,
+      "template": "{query}{sep}{sep}{passage}",
+      "model_kwargs": {
+        "trust_remote_code": true,
+        "attn_implementation": "flash_attention_2"
+      }
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]
