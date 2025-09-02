@@ -13,7 +13,7 @@ from data import IndexInput, IndexResult
 
 def patch_sentence_transformer(model: SentenceTransformer):
     try:
-        from optimum.bettertransformer import BetterTransformer
+        from opi_optimum.bettertransformer import BetterTransformer
         from sentence_transformers.models import Transformer
         for module in model.modules():
             if isinstance(module, Transformer):

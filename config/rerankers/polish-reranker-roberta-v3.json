@@ -8,6 +8,7 @@
       "reranker_name": "sdadas/polish-reranker-roberta-v3",
       "reranker_type": "classifier",
       "batch_size": 32,
+      "max_seq_length": 8192,
       "bf16": true,
       "template": "{query}{sep}{sep}{passage}",
       "model_kwargs": {

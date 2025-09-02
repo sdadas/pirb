@@ -39,7 +39,7 @@ class SpladeEncoder(QueryEncoder):
         model = AutoModelForMaskedLM.from_pretrained(self.model_name_or_path, **model_kwargs).to(self.device)
         tokenizer.model_max_length = self.maxlen
         if self.use_bettertransformer:
-            from optimum.bettertransformer import BetterTransformer
+            from opi_optimum.bettertransformer import BetterTransformer
             model = BetterTransformer.transform(model)
         model.eval()
         return tokenizer, model

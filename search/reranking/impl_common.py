@@ -42,7 +42,7 @@ class ClassifierReranker(RerankerBase):
         ).to(self.device)
         model.eval()
         if self.use_bettertransformer:
-            from optimum.bettertransformer import BetterTransformer
+            from opi_optimum.bettertransformer import BetterTransformer
             try:
                 model = BetterTransformer.transform(model)
             except NotImplementedError:
@@ -102,7 +102,7 @@ class Seq2SeqReranker(RerankerBase):
         ).to(self.device)
         model.eval()
         if self.use_bettertransformer:
-            from optimum.bettertransformer import BetterTransformer
+            from opi_optimum.bettertransformer import BetterTransformer
             try:
                 model = BetterTransformer.transform(model)
             except NotImplementedError:
