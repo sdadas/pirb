@@ -3,6 +3,7 @@ import asyncio
 from collections import Counter
 from dataclasses import dataclass
 from random import choice
+from threading import Lock
 from typing import List, Iterable, Tuple, Dict, Callable
 from search.reranking import RerankerBase
 
@@ -11,6 +12,13 @@ from search.reranking import RerankerBase
 class LLMCall:
     messages: List
     response: str = None
+
+
+@dataclass
+class LLMUsage:
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class LLMReranker(RerankerBase):
@@ -27,6 +35,8 @@ class LLMReranker(RerankerBase):
         if self.api_key and self.api_key.startswith("$"):
             self.api_key = os.environ[self.api_key[1:]]
         self.error_on_max_len = False
+        self.usage = LLMUsage()
+        self._usage_lock = Lock()
 
     def call_many_async(self, batch: List[LLMCall]) -> Iterable[LLMCall]:
         return asyncio.run(self._call_many_async(batch))
@@ -50,6 +60,7 @@ class LLMReranker(RerankerBase):
                 temperature=self.temperature,
                 extra_body=self.extra_body
             )
+            self._report_usage(resp)
             completion = resp.choices[0]
             assert completion.finish_reason != "length" or not self.error_on_max_len, "model max length reached"
             request.response = completion.message.content
@@ -69,6 +80,7 @@ class LLMReranker(RerankerBase):
             temperature=self.temperature,
             extra_body=self.extra_body
         )
+        self._report_usage(resp)
         completion = resp.choices[0]
         assert completion.finish_reason != "length" or not self.error_on_max_len, "model max length reached"
         request.response = completion.message.content
@@ -80,6 +92,13 @@ class LLMReranker(RerankerBase):
 
     def rerank(self, query: str, docs: List[str], proba: bool = False):
         return NotImplementedError()
+
+    def _report_usage(self, response):
+        with self._usage_lock:
+            self.usage.calls += 1
+            if response.usage:
+                self.usage.input_tokens += response.usage.prompt_tokens
+                self.usage.output_tokens += response.usage.completion_tokens
 
 
 class RankGPTReranker(LLMReranker):

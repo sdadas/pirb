@@ -7,6 +7,7 @@ import tempfile
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from dataclasses import asdict
 from functools import partial
 from multiprocessing.pool import ThreadPool
 from typing import List, Iterable, Dict, Optional, Tuple, Union, Set, Callable
@@ -187,11 +188,14 @@ class RerankerHybrid(HybridStrategy):
         self._stats_elapsed += (time.time() - start_time)
         return results
 
-    def accumulate_stats(self, stats: Dict):
+    def accumulate_stats(self, stats: Dict, task: RetrievalTask):
         q = stats.get("queries", 0)
         t = stats.get("reranking_time", 0.0) + self._stats_elapsed
         stats["reranking_time"] = t
         stats["reranking_qps"] = q / t
+        if isinstance(self.reranker, LLMReranker):
+            for key, val in asdict(self.reranker.usage).items():
+                stats[f"{task.task_id}_{key}"] = val
 
     def _load_task_data(self):
         logging.info("Loading passages for reranker")
@@ -386,9 +390,9 @@ class HybridIndex(SearchIndex):
                 return False
         return True
 
-    def accumulate_stats(self, stats: Dict):
+    def accumulate_stats(self, stats: Dict, task: RetrievalTask):
         if isinstance(self.strategy, RerankerHybrid):
-            self.strategy.accumulate_stats(stats)
+            self.strategy.accumulate_stats(stats, task)
 
     def name(self):
         return f"hybrid_{self.hybrid_name}"

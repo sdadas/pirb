@@ -7,8 +7,7 @@ from abc import ABC
 from typing import List, Iterable, Dict, Optional, Tuple
 from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedTokenizer
-
-from data import IndexInput, IndexResult
+from data import IndexInput, IndexResult, RetrievalTask
 
 
 def patch_sentence_transformer(model: SentenceTransformer):
@@ -83,7 +82,7 @@ class SearchIndex(ABC):
             os.remove(output_path)
         os.rename(tmp_path, output_path)
 
-    def accumulate_stats(self, stats: Dict):
+    def accumulate_stats(self, stats: Dict, task: RetrievalTask):
         pass
 
     def model_dict(self) -> Dict:

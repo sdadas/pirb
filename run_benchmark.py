@@ -131,7 +131,7 @@ class RetrievalEvaluator:
         }
         self._log_score(task, index, metrics, metadata)
         self.stats["queries"] = self.stats.get("queries", 0) + len(queries)
-        index.accumulate_stats(self.stats)
+        index.accumulate_stats(self.stats, task)
         print(", ".join([f"{k}: {v:.4f}%" for k, v in metrics.items() if not isinstance(v, list)]) + f" ({index.name()})")
         return ndcg
 
