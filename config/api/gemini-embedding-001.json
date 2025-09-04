@@ -1,0 +1,12 @@
+[
+  {
+    "name": "gemini/gemini-embedding-001",
+    "api_name": "gemini-embedding-001",
+    "type": "api",
+    "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_key": "$GEMINI_KEY",
+    "model_max_length": 2048,
+    "batch_size": 32,
+    "threads": 1
+  }
+]

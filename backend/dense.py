@@ -93,3 +93,8 @@ class RawVectorsBackend(DenseBackend):
 
     def supports_tensors(self):
         return True
+
+    def close(self):
+        self._index = None
+        self._ids = None
+

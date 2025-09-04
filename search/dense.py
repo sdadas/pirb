@@ -2,6 +2,7 @@ import logging
 import math
 import os.path
 import random
+import traceback
 from functools import partial
 from typing import List, Iterable, Dict, Optional, Union, Any, Callable
 import numpy as np
@@ -89,11 +90,13 @@ class OpenAIEmbeddings:
             self.api_key = os.environ[self.api_key[1:]]
         self.batch_size = config.get("batch_size", 32)
         self.tokenizer: Any = self._create_tokenizer(self.model)
-        self.truncate_func: Callable = (
-            self._truncate_prompt_tokens_hf
-            if isinstance(self.tokenizer, PreTrainedTokenizer)
-            else self._truncate_prompt_tokens_tiktoken
-        )
+        self.truncate_func = self._truncate_prompt_noop
+        if self.tokenizer is not None:
+            self.truncate_func: Callable = (
+                self._truncate_prompt_tokens_hf
+                if isinstance(self.tokenizer, PreTrainedTokenizer)
+                else self._truncate_prompt_tokens_tiktoken
+            )
         self.max_len = config.get("model_max_length")
         self.threads = config.get("threads", 8)
         logging.info("Using remote embeddings via OpenAI API")
@@ -103,6 +106,8 @@ class OpenAIEmbeddings:
             import tiktoken
             model_name = model_name.removeprefix("openai/")
             return tiktoken.encoding_for_model(model_name)
+        elif model_name.startswith("gemini/"):
+            return None
         else:
             return AutoTokenizer.from_pretrained(model_name)
 
@@ -152,16 +157,24 @@ class OpenAIEmbeddings:
             truncated.append(text)
         return truncated
 
+    def _truncate_prompt_noop(self, batch, max_len):
+        return batch
+
     @staticmethod
     def _encode_batch(batch: List[str], api_name: str, api_base: Union[List, str], api_key: str):
         from openai import OpenAI
         if isinstance(api_base, list):
             api_base = random.choice(api_base)
         client = OpenAI(api_key=api_key, base_url=api_base)
-        result = client.embeddings.create(
-            input=batch, model=api_name, encoding_format="float", timeout=300
-        )
-        embeddings = [val.embedding for val in result.data]
+        try:
+            result = client.embeddings.create(
+                input=batch, model=api_name, encoding_format="float", timeout=300
+            )
+            embeddings = [val.embedding for val in result.data]
+        except Exception as e:
+            traceback.print_exc()
+            raise e
+        client.close()
         return embeddings
 
 
