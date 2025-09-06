@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Alibaba-NLP/gte-multilingual-reranker-base",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "Alibaba-NLP/gte-multilingual-reranker-base",
+      "reranker_type": "classifier",
+      "batch_size": 128,
+      "bf16": true,
+      "template": "{query}{sep}{sep}{passage}",
+      "max_seq_length": 8192,
+      "model_kwargs": {
+        "trust_remote_code": true,
+        "unpad_inputs": true,
+        "use_memory_efficient_attention": true
+      }
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]
