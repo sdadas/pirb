@@ -26,6 +26,8 @@ class Reranker:
             reranker = RankGPTReranker(**config)
         elif reranker_type == "llm_pairwise":
             reranker = PairwiseLLMReranker(**config)
+        elif reranker_type == "llm_trueskill":
+            reranker = TrueskillReranker(**config)
         else:
             raise AssertionError(f"Unknown reranker type {reranker_type}")
         return reranker

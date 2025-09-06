@@ -1,10 +1,11 @@
 import os
 import asyncio
+import math
 from collections import Counter
 from dataclasses import dataclass
 from random import choice
 from threading import Lock
-from typing import List, Iterable, Tuple, Dict, Callable
+from typing import List, Iterable, Tuple, Dict, Callable, Any
 from search.reranking import RerankerBase
 
 
@@ -19,6 +20,7 @@ class LLMUsage:
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    length_errors: int = 0
 
 
 class LLMReranker(RerankerBase):
@@ -99,6 +101,9 @@ class LLMReranker(RerankerBase):
             if response.usage:
                 self.usage.input_tokens += response.usage.prompt_tokens
                 self.usage.output_tokens += response.usage.completion_tokens
+            if response.choices and len(response.choices) > 0:
+                completion = response.choices[0]
+                self.usage.length_errors += (1 if completion.finish_reason == "length" else 0)
 
 
 class RankGPTReranker(LLMReranker):
@@ -141,7 +146,7 @@ class RankGPTReranker(LLMReranker):
         while slice_start >= 0:
             slice_end = slice_start + self.sliding_window_size
             docs_slice = docs_copy[slice_start:slice_end]
-            sorted_slice = self._rerank_slice(query, docs_slice)
+            sorted_slice = self.rerank_slice(query, docs_slice)
             for idx, slice_idx in enumerate(range(slice_start, slice_end)):
                 doc = sorted_slice[idx]
                 docs_copy[slice_idx] = doc
@@ -150,16 +155,14 @@ class RankGPTReranker(LLMReranker):
         scores = [docs_scores[doc] for doc in docs]
         return scores
 
-    def _rerank_slice(self, query: str, docs: List[str]):
-        messages = self._get_prompt(query, docs)
+    def rerank_slice(self, query: str, docs: List[str]):
+        messages = self.get_prompt(query, docs)
         request = LLMCall(messages)
         self.call(request)
-        response = "".join([(c if c.isdigit() else " ") for c in request.response]).strip()
-        ranks = self._create_ranks(response, docs)
-        sorted_docs = [docs[i] for i in ranks]
-        return sorted_docs
+        return self.create_ranks(request.response, docs)
 
-    def _create_ranks(self, response: str, docs: List[str]):
+    def create_ranks(self, response: str, docs: List[str]):
+        response = "".join([(c if c.isdigit() else " ") for c in response]).strip()
         ranks = [int(x) - 1 for x in response.split()]
         ranks_ids = set()
         possible_ranks = set(range(len(docs)))
@@ -173,9 +176,10 @@ class RankGPTReranker(LLMReranker):
                 result.append(i)
                 ranks_ids.add(i)
         assert len(result) == len(docs)
-        return result
+        sorted_docs = [docs[i] for i in result]
+        return sorted_docs
 
-    def _get_prompt(self, query: str, docs: List[str]):
+    def get_prompt(self, query: str, docs: List[str]):
         res = []
         res.append({"role": "system", "content": self.system_prompt})
         res.append({"role": "user", "content": self.first_prompt.format(num_docs=len(docs), query=query)})
@@ -280,3 +284,93 @@ class PairwiseLLMReranker(LLMReranker):
         docs_scores = {doc: float(1.0 / (idx + 1.0)) for idx, doc in enumerate(docs_copy)}
         scores = [docs_scores[doc] for doc in docs]
         return scores
+
+
+@dataclass
+class Player:
+    doc: str
+    rating: Any
+    matches: int = 0
+
+    def skill(self):
+        return self.rating.mu
+
+    def conservative_skill(self, k: int = 3):
+        return self.rating.mu - k * self.rating.sigma
+
+
+class TrueskillReranker(RankGPTReranker):
+    """
+    Based on Microsoft Trueskill https://www.microsoft.com/en-us/research/project/trueskill-ranking-system/
+    """
+
+    def __init__(self, **config):
+        super().__init__(**config)
+        self.max_players = config.get("max_players", 20)
+        self.rounds = config.get("rounds", 10)
+
+    def rerank(self, query: str, docs: List[str], proba: bool = False):
+        import trueskill
+        env = trueskill.TrueSkill(draw_probability=0.0)
+        players: Dict[str, Player] = {}
+        for doc in docs:
+            rating = env.create_rating()
+            players[doc] = Player(doc, rating)
+        groups = self._initial_groups(docs)
+        self.matches(query, env, players, groups)
+        for i in range(self.rounds):
+            players_list, docs_list = self.get_current_rating(players)
+            #groups = [self.get_next_match(players_list, docs_list)]
+            groups = self.get_next_round(docs_list)
+            self.matches(query, env, players, groups)
+        return [players[doc].rating.mu for doc in docs]
+
+    def get_next_round(self, docs_list: List[str]):
+        return [docs_list[i:i + self.max_players] for i in range(0, len(docs_list), self.max_players)]
+
+    def get_next_match(self, players_list: List[Player], docs_list: List[str]):
+        max_players = min(self.max_players, len(docs_list))
+        top_players_num = math.ceil(0.25 * max_players)
+        top_players = players_list[:max_players]
+        top_players.sort(key=lambda p: p.rating.sigma, reverse=True)
+        group = set()
+        for idx in range(top_players_num):
+            group.add(top_players[idx].doc)
+        players_list.sort(key=lambda p: p.rating.sigma, reverse=True)
+        for player in players_list:
+            if player.doc in group:
+                continue
+            group.add(player.doc)
+            if len(group) >= max_players:
+                break
+        return list(group)
+
+    def get_current_rating(self, players: Dict[str, Player]):
+        players_list = [player for player in players.values()]
+        players_list.sort(key=lambda player: player.rating.mu, reverse=True)
+        docs_list = [player.doc for player in players_list]
+        return players_list, docs_list
+
+    def _initial_groups(self, docs: List[str]):
+        k = -(-len(docs) // self.max_players)
+        matches = [[] for _ in range(k)]
+        for i, elem in enumerate(docs):
+            matches[i % k].append(elem)
+        return matches
+
+    def matches(self, query: str, env, players: Dict[str, Player], batch: List[List[str]]):
+        calls = [LLMCall(self.get_prompt(query, docs)) for docs in batch]
+        if len(calls) == 1:
+            self.call(calls[0])
+        else:
+            self.call_many_async(calls)
+        for idx, call in enumerate(calls):
+            docs = batch[idx]
+            sorted_docs = self.create_ranks(call.response, docs)
+            sorted_players: List[Player] = [players[doc] for doc in sorted_docs]
+            for player in sorted_players:
+                player.matches += 1
+            rated_players = env.rate([(player.rating,) for player in sorted_players])
+            for k, new_rating in enumerate(rated_players):
+                player = sorted_players[k]
+                player.rating = new_rating[0]

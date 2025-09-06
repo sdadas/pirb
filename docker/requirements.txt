@@ -13,3 +13,4 @@ pyserini<=0.39.0
 faiss-cpu
 xgboost
 pytrec-eval
+flash-attn>=2.7.3,<2.8.0

@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:25.06-py3
+FROM nvcr.io/nvidia/pytorch:25.01-py3
 
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
@@ -11,5 +11,5 @@ RUN apt update \
     && pip install -r requirements.txt
 
 # Install XFormers
-ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0"
-RUN pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu129 --no-deps
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6"
+RUN pip install git+https://github.com/facebookresearch/xformers.git@v0.0.29.post3 --no-deps
