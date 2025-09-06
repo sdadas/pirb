@@ -7,7 +7,7 @@ import numpy as np
 from scipy.special import expit
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, PreTrainedTokenizer, PreTrainedModel, \
-    AutoModelForSeq2SeqLM
+    AutoModelForSeq2SeqLM, AutoModelForCausalLM
 from search.base import SmartTemplate
 from search.reranking import RerankerBase
 from utils.system import install_package
@@ -390,3 +390,54 @@ class MixedbreadReranker(RerankerBase):
             queries=queries, documents=docs, batch_size=self.batch_size, show_progress=False
         )
         return scores.tolist()
+
+
+class CtxlReranker(RerankerBase):
+
+    def __init__(self, **kwargs):
+        self.reranker_name = kwargs["reranker_name"]
+        self.use_bf16 = kwargs.get("bf16", False)
+        self.use_fp16 = kwargs.get("fp16", False)
+        self.batch_size = kwargs.get("batch_size", 32)
+        self.max_length = kwargs.get("max_seq_length", 8192)
+        self.model_kwargs = kwargs.get("model_kwargs", {})
+        model, tokenizer = self._load_model()
+        self.model = model
+        self.tokenizer = tokenizer
+
+    def _load_model(self):
+        dtype = "auto"
+        if self.use_bf16:
+            dtype = torch.bfloat16
+        elif self.use_fp16:
+            dtype = torch.float16
+        model = AutoModelForCausalLM.from_pretrained(
+            self.reranker_name, device_map="cuda", torch_dtype=dtype, **self.model_kwargs
+        )
+        model.eval()
+        tokenizer = AutoTokenizer.from_pretrained(self.reranker_name, use_fast=True)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "left"
+        return model, tokenizer
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        prompts = self._format_prompts(queries, docs)
+        enc = self.tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, max_length=self.max_length)
+        input_ids = enc["input_ids"].to(self.model.device)
+        attention_mask = enc["attention_mask"].to(self.model.device)
+        with torch.no_grad():
+            out = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            next_logits = out.logits[:, -1, :]
+            scores = next_logits[:, 0].detach().float().cpu().tolist()
+            return scores
+
+    def _format_prompts(self, queries: List[str], docs: List[str], instruction: str = ""):
+        prompts = []
+        if instruction:
+            instruction = f" {instruction}"
+        for query, doc in zip(queries, docs):
+            prompt = (f"Check whether a given document contains information helpful to answer "
+                      f"the query.\n<Document> {doc}\n<Query> {query}{instruction} ??")
+            prompts.append(prompt)
+        return prompts

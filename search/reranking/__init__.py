@@ -20,6 +20,8 @@ class Reranker:
             reranker = MixedbreadReranker(**config)
         elif reranker_type == "qwen3":
             reranker = Qwen3Reranker(**config)
+        elif reranker_type == "ctxl":
+            reranker = CtxlReranker(**config)
         elif reranker_type == "pylate":
             reranker = PylateReranker(**config)
         elif reranker_type == "llm_rankgpt":
