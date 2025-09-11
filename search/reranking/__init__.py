@@ -10,6 +10,8 @@ class Reranker:
         reranker_type = config.get("reranker_type", "classifier")
         if reranker_type == "classifier":
             reranker = ClassifierReranker(**config)
+        elif reranker_type == "vllm":
+            reranker = VLLMClassifierReranker(**config)
         elif reranker_type == "seq2seq":
             reranker = Seq2SeqReranker(**config)
         elif reranker_type in ("flag_classifier", "flag_llm", "flag_layerwise_llm", "flag_lightweight_llm"):

@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 import tempfile
 import weakref
@@ -21,6 +22,7 @@ class ClassifierReranker(RerankerBase):
         self.fp16 = kwargs.get("fp16", False)
         self.bf16 = kwargs.get("bf16", False)
         self.maxlen = kwargs.get("max_seq_length", 512)
+        self.prompt = kwargs.get("prompt", None)
         self.template = kwargs.get("template", "{query}{sep}{sep}{passage}")
         self.use_bettertransformer = kwargs.get("use_bettertransformer", False)
         self.model_kwargs = kwargs.get("model_kwargs", {})
@@ -28,7 +30,7 @@ class ClassifierReranker(RerankerBase):
         self.model: PreTrainedModel = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
         self.sep = self.tokenizer.sep_token
-        assert self.sep is not None, "sep token is none"
+        assert self.sep is not None or "{sep}" not in self.template, "sep token is none"
 
     def _load_classifier(self):
         tokenizer = AutoTokenizer.from_pretrained(self.reranker_name)
@@ -38,8 +40,8 @@ class ClassifierReranker(RerankerBase):
         elif self.bf16:
             dtype = torch.bfloat16
         model = AutoModelForSequenceClassification.from_pretrained(
-            self.reranker_name, torch_dtype=dtype, **self.model_kwargs
-        ).to(self.device)
+            self.reranker_name, torch_dtype=dtype, device_map=self.device, **self.model_kwargs
+        )
         model.eval()
         if self.use_bettertransformer:
             from opi_optimum.bettertransformer import BetterTransformer
@@ -51,13 +53,69 @@ class ClassifierReranker(RerankerBase):
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
         assert len(queries) == len(docs)
-        texts = [self.template.format(query=queries[i], passage=docs[i], sep=self.sep) for i in range(len(docs))]
+        texts = [
+            self.template.format(query=queries[i], passage=docs[i], sep=self.sep, prompt=self.prompt)
+            for i in range(len(docs))
+        ]
         tokens = self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")
         tokens.to(self.device)
         output = self.model(**tokens)
         logits = output.logits.detach().type(torch.float32).cpu().numpy()
         logits = np.squeeze(logits)
         return expit(logits).tolist() if proba else logits.tolist()
+
+
+class VLLMClassifierReranker(RerankerBase):
+
+    def __init__(self, **kwargs):
+        self.config = kwargs
+        self.reranker_name = kwargs["reranker_name"]
+        self.prompt = kwargs.get("prompt", "")
+        self.query_template = kwargs.get("query_template")
+        self.doc_template = kwargs.get("doc_template")
+        self.max_len = self.config["max_seq_length"]
+        self.tokenizer = AutoTokenizer.from_pretrained(self.reranker_name)
+        self.model = self._create_model()
+
+    def _create_model(self):
+        os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+        from vllm import LLM
+        dtype = "float32"
+        if self.config.get("fp16", False):
+            dtype = "float16"
+        elif self.config.get("bf16", False):
+            dtype = "bfloat16"
+        extra_args = self.config.get("model_kwargs", {})
+        if "max_seq_length" in self.config:
+            extra_args["max_model_len"] = self.max_len
+        args = {
+            "model": self.reranker_name,
+            "dtype": dtype,
+            "runner": "pooling",
+            "enable_chunked_prefill": False,  # chunked prefill broken in VLLM 0.10.1.1, enable it later
+            **extra_args
+        }
+        return LLM(**args)
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        raise NotImplementedError("Pair based reranking not possible for VLLMClassifierReranker")
+
+    def rerank(self, query: str, docs: List[str], proba: bool = False):
+        query = self.query_template.format(query=query, prompt=self.prompt)
+        docs = [self.doc_template.format(passage=doc, prompt=self.prompt) for doc in docs]
+        batch = [(query + doc) for doc in docs]
+        batch = self._truncate_prompt_tokens(batch)
+        outputs = self.model.classify(batch, use_tqdm=False)
+        scores = [output.outputs.probs[0] for output in outputs]
+        return scores
+
+    def _truncate_prompt_tokens(self, batch):
+        truncated = []
+        for i in range(0, len(batch)):
+            tokens = self.tokenizer.encode(batch[i], add_special_tokens=True, truncation=True, max_length=self.max_len)
+            texts = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+            truncated.append(texts)
+        return truncated
 
 
 class Seq2SeqReranker(RerankerBase):

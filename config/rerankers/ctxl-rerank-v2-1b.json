@@ -1,0 +1,22 @@
+[
+  {
+    "name": "ContextualAI/ctxl-rerank-v2-instruct-multilingual-1b",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "ContextualAI/ctxl-rerank-v2-instruct-multilingual-1b",
+      "reranker_type": "ctxl",
+      "batch_size": 50,
+      "bf16": true,
+      "max_seq_length": 8192
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]
