@@ -15,9 +15,10 @@ def set_java_env():
         where_cmd = "where" if system == "windows" else "which"
         p = subprocess.Popen([where_cmd, "java"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         result, err = p.communicate()
-        if p.returncode != 0:
-            raise IOError(err)
         res = result.decode("utf-8").strip()
+        if p.returncode != 0:
+            logging.error("No java executable found, this might lead to future errors")
+            return
         if system != "windows":
             res = os.path.realpath(res)
         res = str(Path(res).parent)

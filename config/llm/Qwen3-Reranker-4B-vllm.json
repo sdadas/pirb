@@ -1,0 +1,60 @@
+[
+  {
+    "name": "tomaarsen/Qwen3-Reranker-4B-seq-cls",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "tomaarsen/Qwen3-Reranker-4B-seq-cls",
+      "reranker_type": "vllm",
+      "batch_size": 100,
+      "bf16": true,
+      "max_seq_length": 32768,
+      "prompt": "Given a web search query, retrieve relevant passages that answer the query",
+      "query_template": "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n<Instruct>: {prompt}\n<Query>: {query}\n",
+      "doc_template": "<Document>: {passage}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ],
+    "tasks": {
+      "arguana-pl": {
+        "strategy.prompt": "Given a claim, find documents that refute the claim"
+      },
+      "quora-pl": {
+        "strategy.prompt": "Given a question, retrieve questions that are semantically equivalent to the given question"
+      },
+      "dbpedia-pl": {
+        "strategy.prompt": "Given a query, retrieve relevant entity descriptions from DBPedia"
+      },
+      "fiqa-pl": {
+        "strategy.prompt": "Given a financial question, retrieve user replies that best answer the question"
+      },
+      "hotpotqa-pl": {
+        "strategy.prompt": "Given a multi-hop question, retrieve documents that can help answer the question"
+      },
+      "msmarco-pl": {
+        "strategy.prompt": "Given a web search query, retrieve relevant passages that answer the query"
+      },
+      "nfcorpus-pl": {
+        "strategy.prompt": "Given a question, retrieve relevant documents that best answer the question"
+      },
+      "nq-pl": {
+        "strategy.prompt": "Given a question, retrieve Wikipedia passages that answer the question"
+      },
+      "scidocs-pl": {
+        "strategy.prompt": "Given a scientific paper title, retrieve paper abstracts that are cited by the given paper"
+      },
+      "scifact-pl": {
+        "strategy.prompt": "Given a scientific claim, retrieve documents that support or refute the claim"
+      },
+      "trec-covid-pl": {
+        "strategy.prompt": "Given a query on COVID-19, retrieve documents that answer the query"
+      }
+    }
+  }
+]

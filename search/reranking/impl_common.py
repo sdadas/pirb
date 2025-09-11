@@ -79,7 +79,7 @@ class VLLMClassifierReranker(RerankerBase):
 
     def _create_model(self):
         os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
-        from vllm import LLM
+        from vllm import LLM, __version_tuple__
         dtype = "float32"
         if self.config.get("fp16", False):
             dtype = "float16"
@@ -88,10 +88,13 @@ class VLLMClassifierReranker(RerankerBase):
         extra_args = self.config.get("model_kwargs", {})
         if "max_seq_length" in self.config:
             extra_args["max_model_len"] = self.max_len
+        if __version_tuple__ > (0, 10, 0):
+            extra_args["runner"] = "pooling"
+        else:
+            extra_args["task"] = "score"
         args = {
             "model": self.reranker_name,
             "dtype": dtype,
-            "runner": "pooling",
             "enable_chunked_prefill": False,  # chunked prefill broken in VLLM 0.10.1.1, enable it later
             **extra_args
         }
@@ -103,19 +106,9 @@ class VLLMClassifierReranker(RerankerBase):
     def rerank(self, query: str, docs: List[str], proba: bool = False):
         query = self.query_template.format(query=query, prompt=self.prompt)
         docs = [self.doc_template.format(passage=doc, prompt=self.prompt) for doc in docs]
-        batch = [(query + doc) for doc in docs]
-        batch = self._truncate_prompt_tokens(batch)
-        outputs = self.model.classify(batch, use_tqdm=False)
-        scores = [output.outputs.probs[0] for output in outputs]
+        outputs = self.model.score(query, docs, use_tqdm=False, truncate_prompt_tokens=self.max_len)
+        scores = [output.outputs.score for output in outputs]
         return scores
-
-    def _truncate_prompt_tokens(self, batch):
-        truncated = []
-        for i in range(0, len(batch)):
-            tokens = self.tokenizer.encode(batch[i], add_special_tokens=True, truncation=True, max_length=self.max_len)
-            texts = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-            truncated.append(texts)
-        return truncated
 
 
 class Seq2SeqReranker(RerankerBase):
