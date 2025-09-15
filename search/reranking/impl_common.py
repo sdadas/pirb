@@ -30,7 +30,9 @@ class ClassifierReranker(RerankerBase):
         self.model: PreTrainedModel = model
         self.tokenizer: PreTrainedTokenizer = tokenizer
         self.sep = self.tokenizer.sep_token
+        self.eos = self.tokenizer.eos_token
         assert self.sep is not None or "{sep}" not in self.template, "sep token is none"
+        assert self.eos is not None or "{eos}" not in self.template, "eos token is none"
 
     def _load_classifier(self):
         tokenizer = AutoTokenizer.from_pretrained(self.reranker_name)
@@ -54,7 +56,7 @@ class ClassifierReranker(RerankerBase):
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
         assert len(queries) == len(docs)
         texts = [
-            self.template.format(query=queries[i], passage=docs[i], sep=self.sep, prompt=self.prompt)
+            self.template.format(query=queries[i], passage=docs[i], sep=self.sep, eos=self.eos, prompt=self.prompt)
             for i in range(len(docs))
         ]
         tokens = self.tokenizer(texts, padding="longest", max_length=self.maxlen, truncation=True, return_tensors="pt")

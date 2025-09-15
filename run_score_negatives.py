@@ -93,8 +93,13 @@ class HardNegsBuilder:
         self.task = RawJsonlTask(self.args.task_name)
         self.task.prepare_task(self.args.data_dir)
         self.retriever_keys = [val.strip() for val in self.args.retrievers_keys.split(",")]
-        self.indices: List[SearchIndex] = self.create_indices()
-        assert len(self.retriever_keys) == len(self.indices)
+        self.indices: List[SearchIndex]
+        scores_path = os.path.join(self.args.data_dir, self.task.task_id, "scores.jsonl")
+        if os.path.exists(scores_path) and self.args.use_cached_scores:
+            self.indices = None
+        else:
+            self.indices = self.create_indices()
+            assert len(self.retriever_keys) == len(self.indices)
         self.reraker: Optional[RerankerHybrid] = None
 
     def create_indices(self):
