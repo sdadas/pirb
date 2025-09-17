@@ -1,8 +1,10 @@
 import os
 import asyncio
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass
+from io import StringIO
 from random import choice
 from threading import Lock
 from typing import List, Iterable, Tuple, Dict, Callable, Any
@@ -110,15 +112,22 @@ class RankGPTReranker(LLMReranker):
     """
     Is ChatGPT Good at Search? Investigating Large Language Models as Re-Ranking Agents
     https://aclanthology.org/2023.emnlp-main.923/
+
+    APEER: Automatic Prompt Engineering Enhances Large Language Model Reranking
+    https://dl.acm.org/doi/10.1145/3701716.3717574
     """
 
     def __init__(self, **config):
         super().__init__(**config)
         self.sliding_window_size = config.get("sliding_window_size", 20)
         self.sliding_window_overlap = self.sliding_window_size // 2
-        self._init_prompts()
+        self.max_doc_length = config.get("max_doc_length", None)
+        self.template = config.get("template", "pl")
+        templates = {"pl": self._init_prompts_pl, "en": self._init_prompts_en, "apeer": self._init_prompts_apeer}
+        init_prompts_func = templates.get(self.template)
+        init_prompts_func()
 
-    def _init_prompts(self):
+    def _init_prompts_pl(self):
         self.system_prompt = (
             "Jesteś inteligentnym asystentem, który potrafi sortować dokumenty według ich relewantności do zapytania."
         )
@@ -138,6 +147,49 @@ class RankGPTReranker(LLMReranker):
             "relewantności. Najbardziej relewantny dokument powinien być na pierwszej pozycji. Format odpowiedzi to "
             "[] > [] > [] np. [1] > [2] > [3]. Odpowiedz tylko listą identyfikatorów, bez dodatkowych komentarzy czy "
             "wyjaśnień.\n\nPytanie: {query}"
+        )
+
+    def _init_prompts_en(self):
+        self.system_prompt = (
+            "You are RankGPT, an intelligent assistant that can rank passages based on their relevancy to the query."
+        )
+        self.first_prompt = (
+            "I will provide you with {num_docs} passages, each indicated by number identifier [].\n"
+            "Rank the passages based on their relevance to query: {query}."
+        )
+        self.assistant_response = (
+            "Okay, please provide the passages."
+        )
+        self.assistant_ack = (
+            "Received passage [{num}]."
+        )
+        self.last_prompt = (
+            "Search Query: {query}\n\n---\n\n"
+            "Rank the passages above based on their relevance to the search query. "
+            "The passages should be listed in descending order using identifiers. "
+            "The most relevant passages should be listed first. "
+            "The output format should be [] > [] > [], e.g., [1] > [2] > [3]. "
+            "Only response the ranking results, do not say any word or explain."
+        )
+
+    def _init_prompts_apeer(self):
+        self.system_prompt = (
+            "As RankGPT, your task is to evaluate and rank unique passages based on their relevance and accuracy to a "
+            "given query. Prioritize passages that directly address the query and provide detailed, correct answers. "
+            "Ignore factors such as length, complexity, or writing style unless they seriously hinder readability."
+        )
+        self.first_prompt = (
+            "In response to the query: [querystart] {query} [queryend], rank the passages. "
+            "Ignore aspects like length, complexity, or writing style, and concentrate on passages that provide a "
+            "comprehensive understanding of the query. Take into account any inaccuracies or vagueness in the "
+            "passages when determining their relevance.\n\n"
+        )
+        self.last_prompt = (
+            "Given the query: [querystart] {query} [queryend], produce a succinct and clear ranking of all passages, "
+            "from most to least relevant, using their identifiers. The format should be "
+            "[rankstart] [most relevant passage ID] > [next most relevant passage ID] > ... > "
+            "[least relevant passage ID] [rankend]. "
+            "Refrain from including any additional commentary or explanations in your ranking."
         )
 
     def rerank(self, query: str, docs: List[str], proba: bool = False):
@@ -161,6 +213,11 @@ class RankGPTReranker(LLMReranker):
         self.call(request)
         return self.create_ranks(request.response, docs)
 
+    def rerank_many_slices(self, queries: List[str], docs: List[List[str]]):
+        requests = [LLMCall(self.get_prompt(query, query_docs)) for query, query_docs in zip(queries, docs)]
+        self.call_many_async(requests)
+        return [self.create_ranks(req.response, req_docs) for req, req_docs in zip(requests, docs)]
+
     def create_ranks(self, response: str, docs: List[str]):
         response = "".join([(c if c.isdigit() else " ") for c in response]).strip()
         ranks = [int(x) - 1 for x in response.split()]
@@ -180,15 +237,41 @@ class RankGPTReranker(LLMReranker):
         return sorted_docs
 
     def get_prompt(self, query: str, docs: List[str]):
+        query = self._replace_number(query)
+        docs = [self._replace_number(doc) for doc in docs]
+        if self.template == "apeer":
+            return self._get_prompt_apeer(query, docs)
+        else:
+            return self._get_prompt_multiturn(query, docs)
+
+    def _get_prompt_multiturn(self, query: str, docs: List[str]):
         res = []
         res.append({"role": "system", "content": self.system_prompt})
         res.append({"role": "user", "content": self.first_prompt.format(num_docs=len(docs), query=query)})
         res.append({"role": "assistant", "content": self.assistant_response})
         for idx, doc in enumerate(docs):
+            if self.max_doc_length is not None and len(doc) > self.max_doc_length:
+                doc = doc[:self.max_doc_length - 5] + "(...)"
             res.append({"role": "user", "content": f"[{idx + 1}] {doc}"})
             res.append({"role": "assistant", "content": self.assistant_ack.format(num=idx + 1)})
         res.append({"role": "user", "content": self.last_prompt.format(query=query)})
         return res
+
+    def _get_prompt_apeer(self, query: str, docs: List[str]):
+        res = []
+        res.append({"role": "system", "content": self.system_prompt})
+        content = StringIO()
+        content.write(self.first_prompt.format(query=query))
+        for idx, doc in enumerate(docs):
+            if self.max_doc_length is not None and len(doc) > self.max_doc_length:
+                doc = doc[:self.max_doc_length - 5] + "(...)"
+            content.write(f"[{idx + 1}] {doc}\n\n")
+        content.write(self.last_prompt.format(query=query))
+        res.append({"role": "user", "content": content.getvalue()})
+        return res
+
+    def _replace_number(self, s: str) -> str:
+        return re.sub(r"\[(\d+)\]", r"(\1)", s)
 
 
 class PairwiseLLMReranker(LLMReranker):

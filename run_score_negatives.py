@@ -73,7 +73,7 @@ class HardNegsArgs:
         metadata={"help": "Queries ending index"},
     )
     text_field: str = field(
-        default="contents",
+        default="source",
         metadata={"help": "Name of the default text field"},
     )
     use_cached_scores: bool = field(
