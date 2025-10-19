@@ -34,6 +34,7 @@ class RetrievalTask:
         self.group_id = group_id
         self.skip_self = skip_self
         self.limit_queries = None
+        self.text_field = self.TEXT_FIELD
 
     def is_small(self, data_dir: str, scope: str) -> bool:
         max_size = {"small": 104_857_600, "tiny": 20_971_520}[scope]
@@ -74,7 +75,7 @@ class RetrievalTask:
             for line in tqdm(input_file, desc="Reading passages", disable=not verbose):
                 value = json.loads(line.strip())
                 parent_id = value.get("parentId", None)
-                yield IndexInput(value["id"], value[RetrievalTask.TEXT_FIELD], parent_id=parent_id)
+                yield IndexInput(value["id"], value[self.text_field], parent_id=parent_id)
 
     def queries(self, data_dir: str) -> Iterable[IndexInput]:
         input_path = self.queries_path(data_dir)
@@ -87,7 +88,7 @@ class RetrievalTask:
                 relevant_scores = value.get("relevant_scores", None)
                 if relevant_scores is None:
                     relevant_scores = [1] * len(relevant)
-                yield IndexInput(value["id"], value[RetrievalTask.TEXT_FIELD], relevant, relevant_scores)
+                yield IndexInput(value["id"], value[self.text_field], relevant, relevant_scores)
 
     def exists(self, data_dir):
         passages_path = self.passages_path(data_dir)
@@ -108,37 +109,41 @@ class RetrievalTask:
 
 class RawJsonlTask(RetrievalTask):
 
-    def __init__(self, task_id: str, skip_self: bool = False):
-        super().__init__(task_id, "Web")
+    def __init__(self, task_id: str, skip_self: bool = False, lang: str = None):
+        super().__init__(task_id if lang is None else f"{task_id}-{lang}", "Web")
+        self.task_dir = task_id
         self.symmetric_task = False
         self.skip_self = skip_self
+        self.lang = lang
+        if lang is not None:
+            self.text_field = lang
 
     def prepare_task(self, data_dir: str):
-        passages_path = os.path.join(data_dir, self.task_id, "passages/passages.jsonl")
-        queries_path = os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
+        passages_path = os.path.join(data_dir, self.task_dir, "passages/passages.jsonl")
+        queries_path = os.path.join(data_dir, self.task_dir, "queries/queries.jsonl")
         if not os.path.exists(queries_path):
             raise ValueError("Missing queries file %s, you should copy it manually" % (queries_path,))
         if not os.path.exists(passages_path):
-            logging.error(f"⚠️ Detected {self.task_id} as symmetric task ⚠️")
+            logging.error(f"⚠️ Detected {self.task_dir} as symmetric task ⚠️")
             self.symmetric_task = True
             self.skip_self = True
 
     def is_available(self, data_dir) -> bool:
-        queries_path = os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
+        queries_path = os.path.join(data_dir, self.task_dir, "queries/queries.jsonl")
         if not os.path.exists(queries_path):
-            logging.error(f"⚠️ Dataset {self.task_id} is not available, removing it from the evaluation ⚠️")
+            logging.error(f"⚠️ Dataset {self.task_dir} is not available, removing it from the evaluation ⚠️")
             return False
         else:
             return True
 
     def passages_path(self, data_dir: str):
         if self.symmetric_task:
-            return os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
+            return os.path.join(data_dir, self.task_dir, "queries/queries.jsonl")
         else:
-            return os.path.join(data_dir, self.task_id, "passages/passages.jsonl")
+            return os.path.join(data_dir, self.task_dir, "passages/passages.jsonl")
 
     def queries_path(self, data_dir: str):
-        return os.path.join(data_dir, self.task_id, "queries/queries.jsonl")
+        return os.path.join(data_dir, self.task_dir, "queries/queries.jsonl")
 
 
 class MFAQTask(RetrievalTask):

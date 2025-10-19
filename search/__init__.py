@@ -1,4 +1,5 @@
 import copy
+import logging
 from typing import Any
 from .base import *
 from data import RetrievalTask
@@ -15,8 +16,9 @@ class AutoIndex:
         use_bt = args.use_bettertransformer if hasattr(args, "use_bettertransformer") else False
         tasks_config = config.get("tasks", None)
         if tasks_config is not None and isinstance(tasks_config, dict):
-            task_overrides = tasks_config.get(task.task_id, None)
+            task_overrides = AutoIndex.find_task_overrides(task.task_id, tasks_config)
             if task_overrides is not None and isinstance(task_overrides, dict):
+                logging.info("Overriding default params for task {}".format(task.task_id))
                 config = copy.deepcopy(config)
                 for key, val in task_overrides.items():
                     if "." in key:
@@ -52,3 +54,14 @@ class AutoIndex:
         for k in keys[:-1]:
             d = d.setdefault(k, {})
         d[keys[-1]] = value
+
+    @staticmethod
+    def find_task_overrides(task_id: str, tasks_config: Dict):
+        task_overrides = tasks_config.get(task_id, None)
+        if task_overrides is None:
+            for key, val in tasks_config.items():
+                if key.startswith("~"):
+                    task_substring = key[1:].lower()
+                    if task_substring in task_id.lower():
+                        task_overrides = val
+        return task_overrides

@@ -1,0 +1,15 @@
+[
+  {
+    "name": "google/embeddinggemma-300m",
+    "bf16": true,
+    "max_seq_length": 2048,
+    "q_prefix_name": "query",
+    "p_prefix_name": "document",
+    "tasks": {
+      "~quora": {
+        "q_prefix_name": "STS",
+        "p_prefix_name": "STS"
+      }
+    }
+  }
+]

@@ -9,11 +9,11 @@
       "trust_remote_code": true
     },
     "tasks": {
-      "arguana-pl": {
+      "~arguana": {
         "q_prefix_name": "text-matching",
         "p_prefix_name": "text-matching"
       },
-      "quora-pl": {
+      "~quora": {
         "q_prefix_name": "text-matching",
         "p_prefix_name": "text-matching"
       }
