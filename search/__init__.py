@@ -38,7 +38,11 @@ class AutoIndex:
             return SpladeIndex(config, data_dir=cache_dir, use_bettertransformer=use_bt)
         elif index_name in ("sparse", "bm25"):
             from .lucene import LuceneIndex
-            lang = config.get("lang", "pl")
+            lang = config.get("lang", None)
+            if hasattr(task, "lang") and getattr(task, "lang") is not None:
+                lang = getattr(task, "lang")
+            if lang is None:
+                lang = "pl"
             threads = config.get("threads", 8)
             return LuceneIndex(cache_dir, lang, threads)
         elif index_type == "late_interaction":
