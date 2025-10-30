@@ -2,10 +2,11 @@ import json
 import logging
 import os.path
 import shutil
-from typing import List, Iterable, Dict, Optional, TextIO
+from typing import List, Iterable, Dict, Optional, TextIO, Union
 import numpy as np
 import torch
 from pyserini.encode import QueryEncoder
+from sentence_transformers import SparseEncoder
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForMaskedLM, BatchEncoding
 from backend import IndexBackend, SparseBackend
@@ -21,6 +22,7 @@ class SpladeEncoder(QueryEncoder):
         self.config = config
         self.use_bettertransformer = use_bettertransformer
         self.model_name_or_path = config["name"]
+        self.encoder_type = self.config.get("encoder_type", None)
         self.maxlen = config.get("max_seq_length", 512)
         self.model_kwargs = config.get("model_kwargs", {})
         self.tokenizer, self.model = self._init_tokenizer_and_model()
@@ -33,10 +35,14 @@ class SpladeEncoder(QueryEncoder):
             torch_dtype = torch.float16
         elif self.config.get("bf16", False):
             torch_dtype = torch.bfloat16
-        model_kwargs = {"torch_dtype": torch_dtype}
+        model_kwargs = {"torch_dtype": torch_dtype, 'attn_implementation': self.config.get('attn_implementation', None)}
         model_kwargs.update(self.model_kwargs)
         tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path)
-        model = AutoModelForMaskedLM.from_pretrained(self.model_name_or_path, **model_kwargs).to(self.device)
+        if self.encoder_type == 'sentence_transformer':
+            model = self._init_sentence_transformer(self.model_name_or_path, **model_kwargs)
+        else:
+            model = AutoModelForMaskedLM.from_pretrained(self.model_name_or_path, **model_kwargs)
+        model = model.to(self.device)
         tokenizer.model_max_length = self.maxlen
         if self.use_bettertransformer:
             from opi_optimum.bettertransformer import BetterTransformer
@@ -44,34 +50,56 @@ class SpladeEncoder(QueryEncoder):
         model.eval()
         return tokenizer, model
 
-    def encode_batch(self, batch: List[str]):
-        batch: BatchEncoding = self.tokenizer(
-            batch, padding="longest", truncation=True, add_special_tokens=True,
-            return_tensors="pt", max_length=self.tokenizer.model_max_length
-        ).to(self.device)
-        output = self.model(**batch)
-        logits, attention_mask = output["logits"].detach(), batch["attention_mask"].detach()
-        attention_mask = attention_mask.unsqueeze(-1)
-        _relu = torch.relu(logits)
-        splade_vectors = torch.max(torch.log(torch.add(_relu, 1)) * attention_mask, dim=1)
-        input_ids = batch["input_ids"]
-        input_ids.detach()
-        del batch, logits, attention_mask, input_ids, _relu
-        result = splade_vectors[0].detach().squeeze()
-        splade_vectors[1].detach()
-        del splade_vectors
+    def _init_sentence_transformer(self, model_name_or_path, **model_kwargs):
+        model = SparseEncoder(model_name_or_path,
+                              model_kwargs=model_kwargs,
+                              tokenizer_kwargs={"model_max_length": self.config.get('model_max_length', None)},
+                              device="cuda" if torch.cuda.is_available() else "cpu")
+        if self.config.get('torch_compile', False):
+            model = torch.compile(model)
+        return model
+
+    def _get_encoder_type(self) -> str:
+        return self.config.get("encoder_type")
+
+    def encode_batch(self, batch: List[str], type: str = "doc"):
+        if self.encoder_type == 'sentence_transformer':
+            fn_encode = self.model.encode_document if type == "doc" else self.model.encode_query
+            result = fn_encode(batch, convert_to_sparse_tensor=False)
+            print(result)
+        else:
+            batch: BatchEncoding = self.tokenizer(
+                batch, padding="longest", truncation=True, add_special_tokens=True,
+                return_tensors="pt", max_length=self.tokenizer.model_max_length
+            ).to(self.device)
+            output = self.model(**batch)
+            logits, attention_mask = output["logits"].detach(), batch["attention_mask"].detach()
+            attention_mask = attention_mask.unsqueeze(-1)
+            _relu = torch.relu(logits)
+            splade_vectors = torch.max(torch.log(torch.add(_relu, 1)) * attention_mask, dim=1)
+            input_ids = batch["input_ids"]
+            input_ids.detach()
+            del batch, logits, attention_mask, input_ids, _relu
+            result = splade_vectors[0].detach().squeeze()
+            splade_vectors[1].detach()
+            del splade_vectors
         return result
 
     def encode_document_vector(self, splade_vector: torch.Tensor):
-        data = splade_vector.cpu().numpy()
-        idx = np.nonzero(data)
-        data = data[idx]
-        data = np.rint(data * self.quantization_factor).astype(int)
         dict_splade = dict()
-        for id_token, value_token in zip(idx[0], data):
-            if value_token > 0:
-                real_token = self.vocab[id_token]
-                dict_splade[real_token] = int(value_token)
+        if self.encoder_type == 'sentence_transformer':
+            decoded = self.model.decode(splade_vector)
+            for _d in decoded:
+                dict_splade[_d[0]] = int(_d[1] * self.quantization_factor)
+        else:
+            data = splade_vector.cpu().numpy()
+            idx = np.nonzero(data)
+            data = data[idx]
+            data = np.rint(data * self.quantization_factor).astype(int)
+            for id_token, value_token in zip(idx[0], data):
+                if value_token > 0:
+                    real_token = self.vocab[id_token]
+                    dict_splade[real_token] = int(value_token)
         return dict_splade
 
     def encode_queries(self, queries: List[str], batch_size: int, query_ids: List[str] = None):
@@ -82,7 +110,7 @@ class SpladeEncoder(QueryEncoder):
         for i in range(0, len(queries), batch_size):
             batch = queries[i:i + batch_size]
             ids_batch = query_ids[i:i + batch_size]
-            encoded = self.encode_batch(batch).cpu().numpy()
+            encoded = self.encode_batch(batch, 'query').cpu().numpy()
             outputs = self._output_to_weight_dicts(encoded)
             assert len(batch) == len(outputs)
             cached.update({text: output for text, output in zip(batch, outputs)})
@@ -122,6 +150,7 @@ class SpladeIndex(SearchIndex):
         self.quantization_factor = config.get("quantization_factor", 100)
         self.threads = config.get("threads", 8)
         self.backend = self._create_backend(config)
+        self.backend_name = self._get_backend_name(config)
         self.encoder: Optional[SpladeEncoder] = None
         self.searcher = None
 
@@ -138,7 +167,12 @@ class SpladeIndex(SearchIndex):
             backend["index_dir"] = self.index_dir
         else:
             raise AssertionError("'backend' arg accepts backend name or backend config as dict")
-        if backend["backend_type"] == "lucene":
+        if backend["backend_type"] == "splade":
+            if self.config.get("encoder_type", None) != 'sentence_transformer':
+                self.config['encoder_type'] = 'sentence_transformer'
+                logging.warning('The encoder_type parameter was changed to \'sentence_transformer\'. '
+                                'Splade-index backend only supports sentence transformer encoder type.')
+        if backend["backend_type"] in ["lucene", "splade"]:
             # noinspection PyTypeChecker
             backend["encoder_provider"] = self._get_encoder
         return IndexBackend.from_config(backend)
@@ -177,12 +211,16 @@ class SpladeIndex(SearchIndex):
         if len(texts) == 1:
             splade_batch = splade_batch.unsqueeze(0)
         for doc, splade_vector in zip(batch, splade_batch):
-            splade_dict = self.encoder.encode_document_vector(splade_vector)
-            dict_ = dict(id=doc.id, content="", vector=splade_dict)
+            if self.backend_name == 'splade':
+                dict_ = dict(id=doc.id, content=doc.text)
+            else:
+                splade_dict = self.encoder.encode_document_vector(splade_vector)
+                dict_ = dict(id=doc.id, content="", vector=splade_dict)
             json_dict = json.dumps(dict_, ensure_ascii=False)
             output.write(json_dict + "\n")
 
-    def search(self, queries: List[IndexInput], k: int, batch_size=1024, verbose=True, cache_prefix=None, overwrite=False) -> Dict:
+    def search(self, queries: List[IndexInput], k: int, batch_size=1024, verbose=True, cache_prefix=None,
+               overwrite=False) -> Dict:
         results = self.load_results_from_cache(k, cache_prefix) if not overwrite else None
         if results is not None: return results
         if self.encoder is None: self._get_encoder()

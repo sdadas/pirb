@@ -33,4 +33,8 @@ class IndexBackend:
         elif backend_type == "voyager":
             from backend.late_interaction import VoyagerBackend
             return VoyagerBackend(index_dir)
+        elif backend_type == "splade":
+            from backend.sparse_splade import SpladeIndexBackend
+            encoder_provider = config.get("encoder_provider")
+            return SpladeIndexBackend(index_dir, encoder_provider)
         raise AssertionError("Unknown backend type: {}".format(backend_type))
