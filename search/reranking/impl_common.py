@@ -494,3 +494,26 @@ class CtxlReranker(RerankerBase):
                       f"the query.\n<Document> {doc}\n<Query> {query}{instruction} ??")
             prompts.append(prompt)
         return prompts
+
+
+class CrossEntropyReranker(RerankerBase):
+    def __init__(self, **kwargs):
+        self.reranker_name = kwargs["reranker_name"]
+        self.batch_size = kwargs.get("batch_size", 32)
+        self.max_length = kwargs.get("max_seq_length", 8192)
+        self.model_kwargs = kwargs.get("model_kwargs", {})
+        self.trust_remote_code = self.model_kwargs.get("trust_remote_code", True)
+        self.model = self._load_model()
+
+    def _load_model(self):
+        from sentence_transformers import CrossEncoder
+        model = CrossEncoder(self.reranker_name, device="cuda",
+                             trust_remote_code=self.trust_remote_code,
+                             max_length=self.max_length)
+        return model
+
+    def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
+        pairs = list(zip(queries, docs))
+        scores = self.model.predict(pairs, batch_size=self.batch_size)
+        return scores.tolist()
+

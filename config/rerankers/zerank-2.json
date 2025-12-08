@@ -1,0 +1,20 @@
+[
+  {
+    "name": "zeroentropy/zerank-2",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "zeroentropy/zerank-2",
+      "reranker_type": "cross_entropy",
+      "batch_size": 32,
+      "max_seq_length": 8192
+    },
+    "models": [
+      {
+        "name": "zeroentropy/zerank-2",
+        "fp16": true
+      }
+    ]
+  }
+]

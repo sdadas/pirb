@@ -32,6 +32,8 @@ class Reranker:
             reranker = PairwiseLLMReranker(**config)
         elif reranker_type == "llm_trueskill":
             reranker = TrueskillReranker(**config)
+        elif reranker_type == "cross_entropy":
+            reranker = CrossEntropyReranker(**config)
         else:
             raise AssertionError(f"Unknown reranker type {reranker_type}")
         return reranker
