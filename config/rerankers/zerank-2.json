@@ -7,7 +7,7 @@
       "type": "reranker",
       "reranker_name": "zeroentropy/zerank-2",
       "reranker_type": "cross_entropy",
-      "batch_size": 32,
+      "batch_size": 1,
       "max_seq_length": 8192
     },
     "models": [
