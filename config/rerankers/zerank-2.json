@@ -6,14 +6,16 @@
     "strategy": {
       "type": "reranker",
       "reranker_name": "zeroentropy/zerank-2",
-      "reranker_type": "cross_entropy",
+      "reranker_type": "cross_encoder",
       "batch_size": 1,
-      "max_seq_length": 8192
+      "max_seq_length": 8192,
+      "revision": "refs/pr/2"
     },
     "models": [
       {
-        "name": "zeroentropy/zerank-2",
-        "fp16": true
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
       }
     ]
   }
