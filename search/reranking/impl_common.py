@@ -516,6 +516,6 @@ class CrossEncoderReranker(RerankerBase):
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
         pairs = list(zip(queries, docs))
-        scores = self.model.predict(pairs, batch_size=self.batch_size)
+        scores = self.model.predict(pairs, batch_size=self.batch_size, show_progress_bar=False)
         return scores.tolist()
 
