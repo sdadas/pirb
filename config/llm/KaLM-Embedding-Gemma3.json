@@ -1,0 +1,22 @@
+[
+  {
+    "name": "tencent/KaLM-Embedding-Gemma3-12B-2511",
+    "bf16": true,
+    "q_prefix": "Instruct: Given a query, retrieve documents that answer the query. \n Query: ",
+    "max_seq_length": 8192,
+    "batch_size": 8,
+    "model_kwargs": {
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    },
+    "tasks": {
+      "~quora": {
+        "q_prefix": "Instruct: Given a question, retrieve questions that are semantically equivalent to the given question \n Query: "
+      },
+      "~arguana": {
+        "q_prefix": "Instruct: Given a claim, find documents that refute the claim \n Query: ",
+        "p_prefix": "Instruct: Given a claim, find documents that refute the claim \n Query: "
+      }
+    }
+  }
+]

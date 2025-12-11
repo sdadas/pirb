@@ -1,15 +1,19 @@
 [
   {
-    "name": "zeroentropy/zerank-2",
+    "name": "nvidia/llama-nemotron-rerank-1b-v2",
     "type": "hybrid",
     "k0": 100,
     "strategy": {
       "type": "reranker",
-      "reranker_name": "zeroentropy/zerank-2",
-      "reranker_type": "cross_encoder",
+      "reranker_name": "nvidia/llama-nemotron-rerank-1b-v2",
+      "reranker_type": "classifier",
       "batch_size": 32,
       "max_seq_length": 8192,
-      "revision": "refs/pr/2"
+      "bf16": true,
+      "template": "question:{query} \n \n passage:{passage}",
+      "model_kwargs": {
+        "trust_remote_code": true
+      }
     },
     "models": [
       {

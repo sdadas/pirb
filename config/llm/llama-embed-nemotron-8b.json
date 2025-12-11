@@ -1,0 +1,13 @@
+[
+  {
+    "name": "nvidia/llama-embed-nemotron-8b",
+    "bf16": true,
+    "q_prefix": "Instruct: Given a question, retrieve passages that answer the question\nQuery: ",
+    "max_seq_length": 8192,
+    "batch_size": 16,
+    "model_kwargs": {
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    }
+  }
+]
