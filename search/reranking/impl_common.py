@@ -502,16 +502,20 @@ class CrossEncoderReranker(RerankerBase):
         self.batch_size = kwargs.get("batch_size", 32)
         self.max_length = kwargs.get("max_seq_length", 8192)
         self.model_kwargs = kwargs.get("model_kwargs", {})
-        self.trust_remote_code = self.model_kwargs.get("trust_remote_code", True)
-        self.revision = self.model_kwargs.get("revision", None)
+        self.trust_remote_code = kwargs.get("trust_remote_code", True)
+        self.revision = kwargs.get("revision", None)
         self.model = self._load_model()
 
     def _load_model(self):
         from sentence_transformers import CrossEncoder
+        for dtype in ["dtype", "torch_dtype"]:
+            if dtype in self.model_kwargs:
+                self.model_kwargs[dtype] = getattr(torch, self.model_kwargs[dtype])
         model = CrossEncoder(self.reranker_name, device="cuda",
-                             trust_remote_code=self.trust_remote_code,
                              max_length=self.max_length,
-                             revision=self.revision)
+                             revision=self.revision,
+                             trust_remote_code=self.trust_remote_code,
+                             model_kwargs=self.model_kwargs)
         return model
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
