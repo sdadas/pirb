@@ -9,7 +9,8 @@
       "reranker_type": "cross_encoder",
       "batch_size": 32,
       "max_seq_length": 8192,
-      "revision": "refs/pr/2"
+      "revision": "refs/pr/2",
+      "bf16": true
     },
     "models": [
       {

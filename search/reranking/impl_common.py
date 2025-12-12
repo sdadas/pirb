@@ -499,6 +499,8 @@ class CtxlReranker(RerankerBase):
 class CrossEncoderReranker(RerankerBase):
     def __init__(self, **kwargs):
         self.reranker_name = kwargs["reranker_name"]
+        self.use_bf16 = kwargs.get("bf16", False)
+        self.use_fp16 = kwargs.get("fp16", False)
         self.batch_size = kwargs.get("batch_size", 32)
         self.max_length = kwargs.get("max_seq_length", 8192)
         self.model_kwargs = kwargs.get("model_kwargs", {})
@@ -508,9 +510,12 @@ class CrossEncoderReranker(RerankerBase):
 
     def _load_model(self):
         from sentence_transformers import CrossEncoder
-        for dtype in ["dtype", "torch_dtype"]:
-            if dtype in self.model_kwargs:
-                self.model_kwargs[dtype] = getattr(torch, self.model_kwargs[dtype])
+        dtype = "auto"
+        if self.use_bf16:
+            dtype = torch.bfloat16
+        elif self.use_fp16:
+            dtype = torch.float16
+        self.model_kwargs["torch_dtype"] = dtype
         model = CrossEncoder(self.reranker_name, device="cuda",
                              max_length=self.max_length,
                              revision=self.revision,
