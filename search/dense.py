@@ -234,6 +234,7 @@ class DenseIndex(SearchIndex):
         self.index_name = encoder["name"].replace("/", "_").replace(".", "_")
         self.model_kwargs = encoder.get("model_kwargs", {})
         self.padding_side = encoder.get("padding_side", None)
+        self.truncate_dim = encoder.get("truncate_dim", None)
         if self._averaging:
             self.index_name += "_averaging"
         self.index_dir = os.path.join(self.data_dir, self.index_name)
@@ -273,7 +274,12 @@ class DenseIndex(SearchIndex):
         model_kwargs.update(self.model_kwargs)
         trust = model_kwargs.get("trust_remote_code", True)
         # noinspection PyArgumentList
-        model = SentenceTransformer(self.encoder_spec["name"], trust_remote_code=trust, model_kwargs=model_kwargs)
+        model = SentenceTransformer(
+            model_name_or_path=self.encoder_spec["name"],
+            trust_remote_code=trust,
+            model_kwargs=model_kwargs,
+            truncate_dim=self.truncate_dim
+        )
         if self.encoder_spec.get("fp16", False):
             model.half()
         elif self.encoder_spec.get("bf16", False):
