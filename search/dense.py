@@ -1,6 +1,6 @@
 import logging
 import math
-import os.path
+import os
 import random
 import traceback
 from functools import partial
@@ -23,10 +23,12 @@ class VLLMEmbeddings:
         self.batch_size = config.get("batch_size", 32)
         self.max_len = self.config["max_seq_length"] if "max_seq_length" in self.config else None
         self.model_name = self.config["name"]
+        self.truncate_dim = config.get("truncate_dim", None)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = self._create_model()
 
     def _create_model(self):
+        os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
         from vllm import LLM
         dtype = "float32"
         if self.config.get("fp16", False):
@@ -36,16 +38,20 @@ class VLLMEmbeddings:
         extra_args = self.config.get("model_kwargs", {})
         if "max_seq_length" in self.config:
             extra_args["max_model_len"] = self.config["max_seq_length"]
+        if self.truncate_dim is not None:
+            extra_args["hf_overrides"] = {"matryoshka_dimensions": [self.truncate_dim]}
         args = {
             "model": self.model_name,
             "dtype": dtype,
-            "task": "embed",
-            "trust_remote_code": True,
+            "runner": "pooling",
+            "convert": "embed",
             **extra_args
         }
         return LLM(**args)
 
     def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
+        from vllm import PoolingParams
+        normalize = kwargs.get("normalize_embeddings", False)
         if isinstance(batch, str):
             batch = [batch]
         if kwargs.get("prompt", None) is not None:
@@ -57,7 +63,8 @@ class VLLMEmbeddings:
             mini_batch = batch[i:i + self.batch_size]
             if self.max_len is not None:
                 mini_batch = self._truncate_prompt_tokens(mini_batch)
-            outputs = self.model.embed(mini_batch, use_tqdm=False)
+            params = PoolingParams(dimensions=self.truncate_dim, normalize=normalize)
+            outputs = self.model.embed(mini_batch, pooling_params=params, use_tqdm=False)
             result = [val.outputs.embedding for val in outputs]
             if convert_to_tensor:
                 embeddings = torch.tensor(result, dtype=torch.float32)
@@ -320,7 +327,8 @@ class DenseIndex(SearchIndex):
                     kwargs["task"] = "text-matching"
                     kwargs["prompt_name"] = None
         causal_fix = any(v in self.index_name.lower() for v in ("gte-qwen2", "inf-retriever", "qwen3-embedding"))
-        if causal_fix and not isinstance(self.encoder, OpenAIEmbeddings):
+        external_encoder = isinstance(self.encoder, OpenAIEmbeddings) or isinstance(self.encoder, VLLMEmbeddings)
+        if causal_fix and not external_encoder:
             kwargs["is_causal"] = False
             self.encoder.module_kwargs["0"] = ["is_causal"]
         return kwargs

@@ -1,0 +1,18 @@
+[
+  {
+    "name": "sdadas/stella-pl-retrieval-mini-8k",
+    "bf16": true,
+    "q_prefix": "Instruct: Given a web search query, retrieve relevant passages that answer the query.\nQuery: ",
+    "batch_size": 32,
+    "max_seq_length": 8192,
+    "model_kwargs": {
+      "trust_remote_code": true
+    },
+    "tasks": {
+      "~quora" : {
+        "q_prefix": "Instruct: Retrieve semantically similar text.\nQuery: ",
+        "p_prefix": "Instruct: Retrieve semantically similar text.\nQuery: "
+      }
+    }
+  }
+]
