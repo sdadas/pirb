@@ -253,6 +253,7 @@ class DenseIndex(SearchIndex):
         self.passage_prefix: Optional[str] = encoder.get("p_prefix", None)
         self.query_prefix_name: Optional[str] = encoder.get("q_prefix_name", None)
         self.passage_prefix_name: Optional[str] = encoder.get("p_prefix_name", None)
+        self.revision = encoder.get("revision", None)
         self.encoder: Optional[SentenceTransformer] = None
 
     def _create_backend(self, encoder_spec: Dict):
@@ -285,7 +286,8 @@ class DenseIndex(SearchIndex):
             model_name_or_path=self.encoder_spec["name"],
             trust_remote_code=trust,
             model_kwargs=model_kwargs,
-            truncate_dim=self.truncate_dim
+            truncate_dim=self.truncate_dim,
+            revision=self.revision
         )
         if self.encoder_spec.get("fp16", False):
             model.half()

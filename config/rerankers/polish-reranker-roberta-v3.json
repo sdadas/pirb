@@ -10,11 +10,7 @@
       "batch_size": 32,
       "max_seq_length": 8192,
       "bf16": true,
-      "template": "{query}{sep}{sep}{passage}",
-      "model_kwargs": {
-        "trust_remote_code": true,
-        "attn_implementation": "flash_attention_2"
-      }
+      "template": "{query}{sep}{sep}{passage}"
     },
     "models": [
       {
