@@ -1,0 +1,118 @@
+[
+  {
+    "name": "CATIE-AQ/camembert-base-embedding",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "CATIE-AQ/distilcamembert-base-embedding",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "CATIE-AQ/SPLADE_camemberta2.0_STS",
+    "max_seq_length": 1024,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-camemberta-base-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-distilcamembert-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-mMiniLMv2-L6-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-mMiniLMv2-L12-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "dangvantuan/sentence-camembert-base",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-camembert-base-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "maastrichtlawtech/camembert-base-lleqa",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "maastrichtlawtech/distilcamembert-lleqa",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-camembert-L2-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-camembert-L6-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-camembert-L4-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-camembert-L8-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "ammumadhu/kunato-indic-bert",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/biencoder-camembert-L10-mmarcoFR",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "antoinelouis/french-me5-base",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/french-me5-large",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/french-bge-m3",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "antoinelouis/french-mgte-base",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "Lajavaness/bilingual-embedding-base",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "Lajavaness/bilingual-embedding-small",
+    "max_seq_length": 512,
+    "bf16": true
+  }
+]

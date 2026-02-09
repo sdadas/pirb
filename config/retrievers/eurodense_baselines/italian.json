@@ -1,0 +1,47 @@
+[
+  {
+    "name": "efederici/sentence-bert-base",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "nickprock/sentence-bert-base-italian-xxl-uncased",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "nickprock/multi-sentence-BERTino",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "mik3ml/multilingual-e5-large-ita",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "nickprock/splade-bert-base-italian-xxl-uncased-cv",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "efederici/sentence-BERTino-v2-mmarco-4m",
+    "max_seq_length": 512,
+    "bf16": true,
+    "q_prefix": "query: ",
+    "p_prefix": "passage: ",
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "efederici/mmarco-sentence-BERTino",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "nickprock/mmarco-bert-base-italian-uncased",
+    "max_seq_length": 512,
+    "bf16": true
+  }
+]

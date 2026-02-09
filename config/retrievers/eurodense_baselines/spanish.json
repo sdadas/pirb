@@ -1,0 +1,40 @@
+[
+  {
+    "name": "hiiamsid/sentence_similarity_spanish_es",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "eduardofv/stsb-m-mt-es-distiluse-base-multilingual-cased-v1",
+    "bf16": true,
+    "max_seq_length": 512,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "somosnlp-hackathon-2022/paraphrase-spanish-distilroberta",
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "ashrafulparan/Semantic-Textual-Relatedness-Spanish",
+    "max_seq_length": 256,
+    "bf16": true
+  },
+  {
+    "name": "CarlosRCDev/spanish-gte-multilingual-base",
+    "max_seq_length": 8192,
+    "bf16": true,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  },
+  {
+    "name": "jinaai/jina-embeddings-v2-base-es",
+    "max_seq_length": 8192,
+    "bf16": true,
+    "batch_size": 8,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  }
+]
