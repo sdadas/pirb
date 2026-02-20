@@ -322,8 +322,8 @@ class DenseIndex(SearchIndex):
             kwargs["prompt_name"] = prefix_name
             if "jina-embeddings-v3" in self.index_name:
                 kwargs["task"] = prefix_name
-            elif "jina-embeddings-v4" in self.index_name:
-                if prefix_name in ("query", "passage"):
+            elif "jina-embeddings-v4" in self.index_name or "jina-embeddings-v5" in self.index_name:
+                if prefix_name in ("query", "passage", "document"):
                     kwargs["task"] = "retrieval"
                 elif prefix_name == "text-matching":
                     kwargs["task"] = "text-matching"

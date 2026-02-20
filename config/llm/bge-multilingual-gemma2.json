@@ -1,7 +1,11 @@
 [
   {
     "name": "BAAI/bge-multilingual-gemma2",
-    "fp16": true,
+    "bf16": true,
+    "model_kwargs": {
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    },
     "q_prefix": "<instruct>Given a web search query, retrieve relevant passages that answer the query.\n<query>",
     "tasks": {
       "arguana-pl": {

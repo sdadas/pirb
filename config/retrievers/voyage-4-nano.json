@@ -1,0 +1,14 @@
+[
+  {
+    "name": "voyageai/voyage-4-nano",
+    "bf16": true,
+    "q_prefix": "Represent the query for retrieving supporting documents: ",
+    "p_prefix": "Represent the document for retrieval: ",
+    "batch_size": 64,
+    "truncate_dim": 2048,
+    "model_kwargs": {
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    }
+  }
+]
