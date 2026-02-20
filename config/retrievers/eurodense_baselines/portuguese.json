@@ -1,0 +1,41 @@
+[
+  {
+    "name": "Luciano/bert-base-portuguese-cased-finetuned-tcu-acordaos",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "neuralmind/bert-large-portuguese-cased",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/6"
+  },
+  {
+    "name": "stjiris/bert-large-portuguese-cased-legal-mlm-sts-v1.0",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "rufimelo/Legal-BERTimbau-sts-large-ma-v3",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "rufimelo/Legal-BERTimbau-large",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "mpjan/msmarco-distilbert-base-tas-b-mmarco-pt-300k",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "PORTULAN/serafim-900m-portuguese-pt-sentence-encoder-ir",
+    "max_seq_length": 128,
+    "bf16": true
+  }
+
+]

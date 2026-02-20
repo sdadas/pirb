@@ -1,0 +1,70 @@
+[
+  {
+    "name": "aari1995/German_Semantic_V3b",
+    "max_seq_length": 512,
+    "bf16": true,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  },
+  {
+    "name": "aari1995/German_Semantic_V3",
+    "max_seq_length": 512,
+    "bf16": true,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  },
+  {
+    "name": "aari1995/German_Semantic_STS_V2",
+    "max_seq_length": 512,
+    "bf16": true,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  },
+  {
+    "name": "PM-AI/bi-encoder_msmarco_bert-base_german",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "deutsche-telekom/gbert-large-paraphrase-euclidean",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "deutsche-telekom/gbert-large-paraphrase-cosine",
+    "max_seq_length": 512,
+    "bf16": true,
+    "revision": "refs/pr/2"
+  },
+  {
+    "name": "jinaai/jina-embeddings-v2-base-de",
+    "max_seq_length": 8192,
+    "bf16": true,
+    "batch_size": 8,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  },
+  {
+    "name": "ferrisS/german-multilingual-e5-small",
+    "max_seq_length": 512,
+    "bf16": true,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  },
+  {
+    "name": "ferrisS/german-english-multilingual-e5-small",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "ferrisS/german-english-bge-m3",
+    "max_seq_length": 512,
+    "bf16": true
+  }
+]
