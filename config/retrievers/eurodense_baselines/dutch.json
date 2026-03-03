@@ -1,0 +1,92 @@
+[
+  {
+    "name": "textgain/tags-allnli-GroNLP-bert-base-dutch-cased",
+    "max_seq_length": 256,
+    "bf16": true,
+    "revision": "refs/pr/1"
+  },
+  {
+    "name": "denniscraandijk/dutch-english-snowflake-arctic-embed-l-v2.0",
+    "bf16": true
+  },
+  {
+    "name": "denniscraandijk/dutch-multilingual-e5-large",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "jacrecra/dutch-english-multilingual-e5-large-instruct",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-small-trm-nl",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-large-trm-nl",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-base-trm-nl",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-small-v2-t2t-nl",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-base-v2-t2t-nl",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-large-v2-t2t-nl",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-small-trm",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-base-trm",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-large-trm",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-small-v2-t2t",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-base-v2-t2t",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/e5-large-v2-t2t",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/robbert-2023-base-ft",
+    "max_seq_length": 512,
+    "bf16": true
+  },
+  {
+    "name": "clips/robbert-2023-large-ft",
+    "max_seq_length": 512,
+    "bf16": true
+  }
+]

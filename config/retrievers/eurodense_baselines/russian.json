@@ -1,0 +1,114 @@
+[
+  {
+    "name": "ai-sage/Giga-Embeddings-instruct",
+    "bf16": true,
+    "max_seq_length": 4096,
+    "model_kwargs": {
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    }
+  },
+  {
+    "name": "cointegrated/rubert-tiny",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "cointegrated/rubert-tiny2",
+    "bf16": true,
+    "max_seq_length": 2048
+  },
+  {
+    "name": "cointegrated/LaBSE-en-ru",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "ai-forever/sbert_large_nlu_ru",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "ai-forever/sbert_large_mt_nlu_ru",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "deepvk/USER-base",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "deepvk/USER-bge-m3",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "batch_size":8
+  },
+  {
+    "name": "deepvk/deberta-v1-base",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "DeepPavlov/rubert-base-cased",
+    "bf16": true,
+    "max_seq_length": 512,
+    "revision": "refs/pr/4"
+  },
+  {
+    "name": "DeepPavlov/rubert-base-cased-sentence",
+    "bf16": true,
+    "max_seq_length": 512,
+    "revision": "refs/pr/3"
+  },
+  {
+    "name": "sergeyzh/rubert-tiny-turbo",
+    "bf16": true,
+    "max_seq_length": 2048
+  },
+  {
+    "name": "sergeyzh/rubert-mini-frida",
+    "bf16": true,
+    "max_seq_length": 2048,
+    "q_prefix": "search_query: ",
+    "p_prefix": "search_document: "
+  },
+  {
+    "name": "sergeyzh/LaBSE-ru-turbo",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "ai-forever/ru-en-RoSBERTa",
+    "bf16": true,
+    "max_seq_length": 512,
+    "q_prefix": "search_query: ",
+    "p_prefix": "search_document: "
+  },
+  {
+    "name": "ai-forever/FRIDA",
+    "bf16": true,
+    "max_seq_length": 512,
+    "q_prefix": "search_query: ",
+    "p_prefix": "search_document: "
+  },
+  {
+    "name": "sergeyzh/BERTA",
+    "bf16": true,
+    "max_seq_length": 512
+  },
+  {
+    "name": "deepvk/USER2-small",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "q_prefix": "search_query: ",
+    "p_prefix": "search_document: "
+  },
+  {
+    "name": "deepvk/USER2-base",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "q_prefix": "search_query: ",
+    "p_prefix": "search_document: "
+  }
+]
