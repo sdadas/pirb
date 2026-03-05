@@ -1,0 +1,11 @@
+[
+  {
+    "name": "perplexity-ai/pplx-embed-v1-4b",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "batch_size": 32,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  }
+]

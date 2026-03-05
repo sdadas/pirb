@@ -5,6 +5,7 @@
     "q_prefix_name": "query",
     "p_prefix_name": "document",
     "batch_size": 32,
+    "max_seq_length": 8192,
     "model_kwargs": {
       "trust_remote_code": true
     },

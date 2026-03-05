@@ -1,0 +1,12 @@
+[
+  {
+    "name": "infgrad/Jasper-Token-Compression-600M",
+    "bf16": true,
+    "q_prefix_name": "query",
+    "max_seq_length": 1024,
+    "batch_size": 16,
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  }
+]
