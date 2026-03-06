@@ -75,7 +75,10 @@ class RetrievalTask:
             for line in tqdm(input_file, desc="Reading passages", disable=not verbose):
                 value = json.loads(line.strip())
                 parent_id = value.get("parentId", None)
-                yield IndexInput(value["id"], value[self.text_field], parent_id=parent_id)
+                text = value[self.text_field]
+                if len(text) == 0:
+                    text = " "
+                yield IndexInput(value["id"], text, parent_id=parent_id)
 
     def queries(self, data_dir: str) -> Iterable[IndexInput]:
         input_path = self.queries_path(data_dir)
@@ -88,7 +91,10 @@ class RetrievalTask:
                 relevant_scores = value.get("relevant_scores", None)
                 if relevant_scores is None:
                     relevant_scores = [1] * len(relevant)
-                yield IndexInput(value["id"], value[self.text_field], relevant, relevant_scores)
+                text = value[self.text_field]
+                if len(text) == 0:
+                    text = " "
+                yield IndexInput(value["id"], text, relevant, relevant_scores)
 
     def exists(self, data_dir):
         passages_path = self.passages_path(data_dir)
