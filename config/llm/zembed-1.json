@@ -1,0 +1,13 @@
+[
+  {
+    "name": "zeroentropy/zembed-1",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "batch_size": 32,
+    "q_prefix_name": "query",
+    "p_prefix_name": "document",
+    "model_kwargs": {
+      "trust_remote_code": true
+    }
+  }
+]

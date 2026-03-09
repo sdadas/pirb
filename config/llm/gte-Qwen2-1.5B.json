@@ -10,6 +10,9 @@
       "trust_remote_code": true,
       "attn_implementation": "flash_attention_2"
     },
+    "encode_kwargs": {
+      "is_causal": false
+    },
     "tasks": {
       "arguana-pl": {
         "q_prefix": "Instruct: Given a claim, find documents that refute the claim\nQuery: ",

@@ -7,6 +7,9 @@
     "batch_size": 16,
     "model_kwargs": {
       "trust_remote_code": true
+    },
+    "encode_kwargs": {
+      "compression_ratio": 0.8
     }
   }
 ]

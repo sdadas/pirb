@@ -5,6 +5,9 @@
     "q_prefix": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: ",
     "max_seq_length": 8192,
     "batch_size": 16,
+    "encode_kwargs": {
+      "is_causal": false
+    },
     "model_kwargs": {
       "trust_remote_code": true
     }

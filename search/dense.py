@@ -240,6 +240,7 @@ class DenseIndex(SearchIndex):
         self.data_dir = data_dir
         self.index_name = encoder["name"].replace("/", "_").replace(".", "_")
         self.model_kwargs = encoder.get("model_kwargs", {})
+        self.encode_kwargs = encoder.get("encode_kwargs", {})
         self.padding_side = encoder.get("padding_side", None)
         self.truncate_dim = encoder.get("truncate_dim", None)
         if self._averaging:
@@ -304,9 +305,23 @@ class DenseIndex(SearchIndex):
                 if "batch_size" not in self.encoder_spec:
                     self._st_bs = 256
         model.eval()
+        self._check_encode_kwargs(model)
         if self._averaging:
             model = TextAveragingEncoder(model)
         self.encoder = model
+
+    def _check_encode_kwargs(self, model: SentenceTransformer):
+        if len(self.encode_kwargs) == 0:
+            return
+        module_kwargs = model.module_kwargs["0"]
+        if module_kwargs is None:
+            module_kwargs = []
+        new_module_kwargs = module_kwargs.copy()
+        for key, val in self.encode_kwargs.items():
+            if key not in module_kwargs:
+                logging.info(f"'{key}' not in default encode kwargs")
+                new_module_kwargs.append(key)
+        model.module_kwargs["0"] = new_module_kwargs
 
     def _encode_kwargs(self, query: bool) -> Dict:
         kwargs = {
@@ -328,11 +343,7 @@ class DenseIndex(SearchIndex):
                 elif prefix_name == "text-matching":
                     kwargs["task"] = "text-matching"
                     kwargs["prompt_name"] = None
-        causal_fix = any(v in self.index_name.lower() for v in ("gte-qwen2", "inf-retriever", "qwen3-embedding"))
-        external_encoder = isinstance(self.encoder, OpenAIEmbeddings) or isinstance(self.encoder, VLLMEmbeddings)
-        if causal_fix and not external_encoder:
-            kwargs["is_causal"] = False
-            self.encoder.module_kwargs["0"] = ["is_causal"]
+        kwargs.update(self.encode_kwargs)
         return kwargs
 
     def exists(self) -> bool:
