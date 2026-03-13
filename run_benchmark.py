@@ -236,6 +236,8 @@ if __name__ == '__main__':
         print(evaluator.stats)
         evaluator.stats = {}
         print(f"Average NDCG@{args.ndcg_k} for {len(benchmark)} tasks: {ndcg_tasks / len(benchmark):.2f}")
+        max_memory = torch.cuda.max_memory_reserved()
+        print(f"Max VRAM: {max_memory / (1024 ** 2):.2f} MB")
     if args.rm:
         logging.info("Removing cached indexes")
         for index_path in index_paths:
