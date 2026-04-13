@@ -2,7 +2,7 @@ import json
 import logging
 import os.path
 import shutil
-from typing import List, Iterable, Dict, Optional, TextIO, Union
+from typing import List, Iterable, Dict, Optional, TextIO
 import numpy as np
 import torch
 from pyserini.encode import QueryEncoder

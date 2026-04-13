@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Callable, Optional
+from typing import List, Dict, Callable
 from pyserini.search import LuceneImpactSearcher
 from pyserini.encode import QueryEncoder
 from backend.base import SparseBackend

@@ -8,7 +8,8 @@ peft
 sentence-transformers>=3.1.1
 joblib>=1.2.0
 scikit-learn>=1.2.1
-pyserini<=0.39.0
+bm25s
+rust_fst
 faiss-cpu
 xgboost
 pytrec-eval
