@@ -1,0 +1,7 @@
+[
+  {
+    "name": "ibm-granite/granite-embedding-97m-multilingual-r2",
+    "bf16": true,
+    "max_seq_length": 8192
+  }
+]
