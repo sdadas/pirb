@@ -1,0 +1,8 @@
+[
+  {
+    "name": "codefuse-ai/F2LLM-v2-330M",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "q_prefix_name": "query"
+  }
+]
