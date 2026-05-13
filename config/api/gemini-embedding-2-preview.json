@@ -1,0 +1,12 @@
+[
+  {
+    "name": "google/gemini-embedding-2-preview",
+    "api_name": "google/gemini-embedding-2-preview",
+    "type": "api",
+    "api_base": "https://openrouter.ai/api/v1",
+    "api_key": "$OPENAI_KEY",
+    "model_max_length": 8192,
+    "batch_size": 4,
+    "threads": 1
+  }
+]

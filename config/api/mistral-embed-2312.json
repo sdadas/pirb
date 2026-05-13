@@ -1,0 +1,12 @@
+[
+  {
+    "name": "mistralai/mistral-embed-2312",
+    "api_name": "mistralai/mistral-embed-2312",
+    "type": "api",
+    "api_base": "https://openrouter.ai/api/v1",
+    "api_key": "$OPENAI_KEY",
+    "model_max_length": 4096,
+    "batch_size": 32,
+    "threads": 4
+  }
+]

@@ -3,6 +3,7 @@ import math
 import os
 import random
 import traceback
+import time
 from functools import partial
 from typing import List, Iterable, Dict, Optional, Union, Any, Callable
 import numpy as np
@@ -115,8 +116,22 @@ class OpenAIEmbeddings:
             return tiktoken.encoding_for_model(model_name)
         elif model_name.startswith("gemini/"):
             return None
+        elif model_name.startswith("google/"):
+            return None
+        elif model_name.startswith("mistralai/"):
+            return self._mistral_tokenizer(model_name)
         else:
             return AutoTokenizer.from_pretrained(model_name)
+
+    def _mistral_tokenizer(self, model_name):
+        from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
+        model_name = model_name.removeprefix("mistralai/")
+        try:
+            tokenizer_mistral =  MistralTokenizer.from_model(model_name)
+            return tokenizer_mistral.instruct_tokenizer.tokenizer
+        except Exception:
+            tokenizer_mistral =  MistralTokenizer.v1()
+            return tokenizer_mistral.instruct_tokenizer.tokenizer
 
     def encode(self, batch: Union[str, List[str]], convert_to_tensor: bool = False, **kwargs):
         if isinstance(batch, str):
@@ -158,7 +173,7 @@ class OpenAIEmbeddings:
     def _truncate_prompt_tokens_tiktoken(self, batch, max_len):
         truncated = []
         for i in range(0, len(batch)):
-            tokens = self.tokenizer.encode(batch[i])
+            tokens = self.tokenizer.encode(batch[i], bos=False, eos=False)
             tokens = tokens[:max_len]
             text = self.tokenizer.decode(tokens)
             truncated.append(text)
@@ -183,7 +198,6 @@ class OpenAIEmbeddings:
             raise e
         client.close()
         return embeddings
-
 
 class TextAveragingEncoder:
 
