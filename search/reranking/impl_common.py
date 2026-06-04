@@ -24,7 +24,6 @@ class ClassifierReranker(RerankerBase):
         self.maxlen = kwargs.get("max_seq_length", 512)
         self.prompt = kwargs.get("prompt", None)
         self.template = kwargs.get("template", "{query}{sep}{sep}{passage}")
-        self.use_bettertransformer = kwargs.get("use_bettertransformer", False)
         self.model_kwargs = kwargs.get("model_kwargs", {})
         model, tokenizer = self._load_classifier()
         self.model: PreTrainedModel = model
@@ -45,12 +44,6 @@ class ClassifierReranker(RerankerBase):
             self.reranker_name, torch_dtype=dtype, device_map=self.device, **self.model_kwargs
         )
         model.eval()
-        if self.use_bettertransformer:
-            from opi_optimum.bettertransformer import BetterTransformer
-            try:
-                model = BetterTransformer.transform(model)
-            except NotImplementedError:
-                logging.warning(f"Model {model.config.model_type} not supported in BetterTransformer")
         return model, tokenizer
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
@@ -124,7 +117,6 @@ class Seq2SeqReranker(RerankerBase):
         self.template = kwargs.get("template", "Query: {query} Document: {passage} Relevant:")
         self.yes_token = kwargs.get("yes_token", "yes")
         self.no_token = kwargs.get("no_token", "no")
-        self.use_bettertransformer = kwargs.get("use_bettertransformer", False)
         self.model_kwargs = kwargs.get("model_kwargs", {})
         model, tokenizer = self._load_model()
         self.model = model
@@ -154,12 +146,6 @@ class Seq2SeqReranker(RerankerBase):
             self.reranker_name, torch_dtype=dtype, **self.model_kwargs
         ).to(self.device)
         model.eval()
-        if self.use_bettertransformer:
-            from opi_optimum.bettertransformer import BetterTransformer
-            try:
-                model = BetterTransformer.transform(model)
-            except NotImplementedError:
-                logging.warning(f"Model {model.config.model_type} not supported in BetterTransformer")
         return model, tokenizer
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):

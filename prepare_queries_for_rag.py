@@ -36,10 +36,6 @@ class PrepareRagArgs:
         default=8,
         metadata={"help": "Number of threads to use for indexing and searching Lucene"},
     )
-    use_bettertransformer: bool = field(
-        default=True,
-        metadata={"help": "Patch dense encoders with BetterTransformer optimizations"},
-    )
     queries_start_idx: int = field(
         default=0,
         metadata={"help": "Queries staring index"},

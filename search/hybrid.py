@@ -339,22 +339,20 @@ class XGBRankerHybrid(HybridStrategy):
 class HybridIndex(SearchIndex):
 
     def __init__(self, data_dir: str, hybrid_name: str, indices: List[SearchIndex], k0: int,
-                 strategy: Optional[Union[HybridStrategy, Dict]], task: RetrievalTask, rerank_limit: Optional[int],
-                 use_bettertransformer: bool):
+                 strategy: Optional[Union[HybridStrategy, Dict]], task: RetrievalTask, rerank_limit: Optional[int]):
         self.data_dir = data_dir
         self.hybrid_name = hybrid_name
         self.indices = indices
         if isinstance(strategy, HybridStrategy):
             self.strategy = strategy
         else:
-            self.strategy = self._load_strategy(strategy, rerank_limit, use_bettertransformer)
+            self.strategy = self._load_strategy(strategy, rerank_limit)
         self.strategy.task = task
         self.strategy.data_dir = data_dir
         self.k0 = k0
 
-    def _load_strategy(self, spec: Dict, rerank_limit: int, use_bettertransformer: bool):
+    def _load_strategy(self, spec: Dict, rerank_limit: int):
         spec["rerank_limit"] = rerank_limit
-        spec["use_bettertransformer"] = use_bettertransformer
         strategy_type = spec["type"]
         types = {"weighted": WeightedHybrid, "xbgranker": XGBRankerHybrid, "reranker": RerankerHybrid}
         cls = types[strategy_type]

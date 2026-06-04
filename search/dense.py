@@ -234,7 +234,7 @@ class TextAveragingEncoder:
 
 class DenseIndex(SearchIndex):
 
-    def __init__(self, data_dir: str, encoder: Dict, use_bettertransformer=False):
+    def __init__(self, data_dir: str, encoder: Dict):
         self._st_bs = encoder.get("batch_size", 32)
         self._averaging = encoder.get("enable_averaging", False)
         self.data_dir = data_dir
@@ -248,7 +248,6 @@ class DenseIndex(SearchIndex):
         self.index_dir = os.path.join(self.data_dir, self.index_name)
         self.backend = self._create_backend(encoder)
         self.normalize = encoder.get("normalize", True)
-        self.use_bettertransformer = use_bettertransformer
         self.encoder_spec = encoder
         self.query_prefix: Optional[str] = encoder.get("q_prefix", None)
         self.passage_prefix: Optional[str] = encoder.get("p_prefix", None)
@@ -298,12 +297,6 @@ class DenseIndex(SearchIndex):
             model.max_seq_length = int(self.encoder_spec["max_seq_length"])
         if self.padding_side is not None:
             model.tokenizer.padding_side = self.padding_side
-        if self.use_bettertransformer:
-            patched = patch_sentence_transformer(model)
-            if patched:
-                logging.info("Using encoder with BetterTransformer enabled")
-                if "batch_size" not in self.encoder_spec:
-                    self._st_bs = 256
         model.eval()
         self._check_encode_kwargs(model)
         if self._averaging:

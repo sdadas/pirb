@@ -3,10 +3,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Dict
 from transformers import HfArgumentParser
+from search.hybrid import XGBRankerHybrid, HybridIndex
 from utils.system import set_java_env
 set_java_env()
 from data import BEIRTask, IndexInput
-from search import SearchIndex, XGBRankerHybrid, HybridIndex, AutoIndex
+from search import SearchIndex, AutoIndex
 
 
 @dataclass
@@ -28,10 +29,6 @@ class BuildHybridArgs:
     threads: int = field(
         default=8,
         metadata={"help": "Number of threads to use for indexing and searching Lucene"},
-    )
-    use_bettertransformer: bool = field(
-        default=True,
-        metadata={"help": "Patch dense encoders with BetterTransformer optimizations"},
     )
     k: int = field(
         default=100,
@@ -72,8 +69,7 @@ class HybridBuilder:
         ranker = XGBRankerHybrid()
         ranker.fit(queries, index_results, valid_fraction=0)
         hindex = HybridIndex(
-            self.args.data_dir, self.args.output_name, self.indices, self.args.k, ranker, self.task,
-            rerank_limit=None, use_bettertransformer=self.args.use_bettertransformer
+            self.args.data_dir, self.args.output_name, self.indices, self.args.k, ranker, self.task, rerank_limit=None
         )
         result = hindex.model_dict()
         output_path = f"config/{self.args.output_name}.json"

@@ -13,7 +13,6 @@ class AutoIndex:
         cache_dir: str = os.path.join(args.cache_dir, task.task_cache_name())
         index_name = config["name"]
         index_type = config.get("type", None)
-        use_bt = args.use_bettertransformer if hasattr(args, "use_bettertransformer") else False
         tasks_config = config.get("tasks", None)
         if tasks_config is not None and isinstance(tasks_config, dict):
             task_overrides = AutoIndex.find_task_overrides(task.task_id, tasks_config)
@@ -32,10 +31,10 @@ class AutoIndex:
             k0 = config.get("k0", 100)
             rerank_limit = args.rerank_limit if hasattr(args, "rerank_limit") else None
             strategy = config.get("strategy", None)
-            return HybridIndex(args.data_dir, index_name, indices, k0, strategy, task, rerank_limit, use_bt)
+            return HybridIndex(args.data_dir, index_name, indices, k0, strategy, task, rerank_limit)
         elif index_type == "splade":
             from .splade import SpladeIndex
-            return SpladeIndex(config, data_dir=cache_dir, use_bettertransformer=use_bt)
+            return SpladeIndex(config, data_dir=cache_dir)
         elif index_name in ("sparse", "bm25"):
             from .bm25 import BM25Index
             lang = config.get("lang", None)
@@ -49,7 +48,7 @@ class AutoIndex:
             return LateInteractionIndex(data_dir=cache_dir, encoder=config)
         else:
             from .dense import DenseIndex
-            return DenseIndex(data_dir=cache_dir, encoder=config, use_bettertransformer=use_bt)
+            return DenseIndex(data_dir=cache_dir, encoder=config)
 
     @staticmethod
     def set_nested_value(d: Dict, key: str, value: Any):

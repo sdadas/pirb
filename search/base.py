@@ -5,22 +5,8 @@ import os.path
 import re
 from abc import ABC
 from typing import List, Iterable, Dict, Optional, Tuple
-from sentence_transformers import SentenceTransformer
 from transformers import PreTrainedTokenizer
 from data import IndexInput, IndexResult, RetrievalTask
-
-
-def patch_sentence_transformer(model: SentenceTransformer):
-    try:
-        from opi_optimum.bettertransformer import BetterTransformer
-        from sentence_transformers.models import Transformer
-        for module in model.modules():
-            if isinstance(module, Transformer):
-                module.auto_model = BetterTransformer.transform(module.auto_model)
-                return True
-    except (ImportError, Exception):
-        pass
-    return False
 
 
 class SearchIndex(ABC):

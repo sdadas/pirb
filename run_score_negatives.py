@@ -56,10 +56,6 @@ class HardNegsArgs:
         default="cache2",
         metadata={"help": "Directory where indexes and cached results are stored"},
     )
-    use_bettertransformer: bool = field(
-        default=True,
-        metadata={"help": "Patch dense encoders with BetterTransformer optimizations"},
-    )
     max_negs_per_index: int = field(
         default=32,
         metadata={"help": "Maximum number of negatives from each retriever"},
@@ -111,8 +107,6 @@ class HardNegsBuilder:
     def create_reranker(self):
         with open(self.args.reranker, "r", encoding="utf-8") as config_file:
             conf = json.load(config_file)
-        if self.args.use_bettertransformer:
-            conf["use_bettertransformer"] = True
         self.reraker = RerankerHybrid(**conf)
 
     def build(self):

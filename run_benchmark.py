@@ -52,10 +52,6 @@ class BenchmarkArgs:
         default="cache",
         metadata={"help": "Directory where indexes and cached results are stored"},
     )
-    use_bettertransformer: bool = field(
-        default=False,
-        metadata={"help": "Patch dense encoders with BetterTransformer optimizations"},
-    )
     scope: str = field(
         default="full",
         metadata={"help": "Scope of benchmark to run: full, small (only datasets <100MB), tiny (only datasets <20MB)"},

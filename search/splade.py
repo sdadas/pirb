@@ -16,11 +16,10 @@ from search.base import SearchIndex
 
 class SpladeEncoder(QueryEncoder):
 
-    def __init__(self, config: Dict, use_bettertransformer: bool, quantization_factor: int = 100):
+    def __init__(self, config: Dict, quantization_factor: int = 100):
         self.quantization_factor = quantization_factor
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.config = config
-        self.use_bettertransformer = use_bettertransformer
         self.model_name_or_path = config["name"]
         self.encoder_type = self.config.get("encoder_type", None)
         self.maxlen = config.get("max_seq_length", 512)
@@ -44,9 +43,6 @@ class SpladeEncoder(QueryEncoder):
             model = AutoModelForMaskedLM.from_pretrained(self.model_name_or_path, **model_kwargs)
         model = model.to(self.device)
         tokenizer.model_max_length = self.maxlen
-        if self.use_bettertransformer:
-            from opi_optimum.bettertransformer import BetterTransformer
-            model = BetterTransformer.transform(model)
         model.eval()
         return tokenizer, model
 
@@ -137,7 +133,7 @@ class SpladeEncoder(QueryEncoder):
 
 class SpladeIndex(SearchIndex):
 
-    def __init__(self, config: Dict, data_dir: str, use_bettertransformer: bool = False):
+    def __init__(self, config: Dict, data_dir: str):
         self.batch_size = 32
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.config = config
@@ -146,7 +142,6 @@ class SpladeIndex(SearchIndex):
         self.index_name = self.model_name_or_path.replace("/", "_").replace(".", "_")
         self.base_dir = os.path.join(self.data_dir, self.index_name)
         self.index_dir = os.path.join(self.base_dir, f"{self._get_backend_name(config)}_index")
-        self.use_bettertransformer = use_bettertransformer
         self.quantization_factor = config.get("quantization_factor", 100)
         self.threads = config.get("threads", 8)
         self.backend = self._create_backend(config)
@@ -179,7 +174,7 @@ class SpladeIndex(SearchIndex):
 
     def _get_encoder(self):
         if self.encoder is None:
-            self.encoder = SpladeEncoder(self.config, self.use_bettertransformer, self.quantization_factor)
+            self.encoder = SpladeEncoder(self.config, self.quantization_factor)
         return self.encoder
 
     def exists(self) -> bool:
