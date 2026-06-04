@@ -13,7 +13,7 @@ from transformers import PreTrainedTokenizer, AutoTokenizer
 from multiprocessing import Pool
 from backend import IndexBackend
 from data import IndexInput
-from search.base import SearchIndex, patch_sentence_transformer
+from search.base import SearchIndex
 
 
 class VLLMEmbeddings:
