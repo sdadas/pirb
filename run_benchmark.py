@@ -214,8 +214,8 @@ if __name__ == '__main__':
 
     benchmark = Benchmark.from_config(args.benchmark_config)
     os.makedirs(args.data_dir, exist_ok=True)
-    benchmark.prepare(args.data_dir)
     benchmark = benchmark.filter(args.scope, args.data_dir)
+    benchmark.prepare(args.data_dir)
 
     logging.info("Running evaluation on %d datasets", len(benchmark))
     evaluator = RetrievalEvaluator(args)
