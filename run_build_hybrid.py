@@ -4,8 +4,6 @@ from dataclasses import dataclass, field
 from typing import List, Dict
 from transformers import HfArgumentParser
 from search.hybrid import XGBRankerHybrid, HybridIndex
-from utils.system import set_java_env
-set_java_env()
 from data import BEIRTask, IndexInput
 from search import SearchIndex, AutoIndex
 

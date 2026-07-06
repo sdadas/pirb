@@ -5,7 +5,6 @@ import shutil
 from typing import List, Iterable, Dict, Optional, TextIO
 import numpy as np
 import torch
-from pyserini.encode import QueryEncoder
 from sentence_transformers import SparseEncoder
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForMaskedLM, BatchEncoding
@@ -14,7 +13,7 @@ from data import IndexInput
 from search.base import SearchIndex
 
 
-class SpladeEncoder(QueryEncoder):
+class SpladeEncoder:
 
     def __init__(self, config: Dict, quantization_factor: int = 100):
         self.quantization_factor = quantization_factor

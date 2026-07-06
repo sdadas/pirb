@@ -10,8 +10,6 @@ import torch
 from sklearn.metrics import ndcg_score
 from tqdm import tqdm
 from transformers import HfArgumentParser
-from utils.system import set_java_env
-set_java_env()
 
 from data import RetrievalTask, Benchmark, IndexResult
 from search import SearchIndex, AutoIndex

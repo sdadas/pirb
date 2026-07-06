@@ -4,17 +4,12 @@ import os.path
 import random
 from collections import defaultdict
 from pathlib import Path
-
 import torch
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
-
 from sklearn.metrics import ndcg_score
-
 from search.hybrid import RerankerHybrid
-from utils.system import set_java_env
-set_java_env()
 from tqdm import tqdm
 from transformers import HfArgumentParser, AutoTokenizer, AutoModelForSeq2SeqLM
 from data import RawJsonlTask, IndexInput, RetrievalTask, IndexResult
