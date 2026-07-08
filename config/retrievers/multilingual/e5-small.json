@@ -1,0 +1,8 @@
+[
+  {
+    "name": "/mnt/e/modele/multilingual-e5-small",
+    "fp16": true,
+    "q_prefix": "query: ",
+    "p_prefix": "passage: "
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "name": "OPI-PIB/PolDense-17M",
+    "bf16": true,
+    "q_prefix": "[query]: ",
+    "batch_size": 128,
+    "tasks": {
+      "~quora" : {
+        "q_prefix": "[sts]: ",
+        "p_prefix": "[sts]: "
+      }
+    },
+    "model_kwargs": {
+      "attn_implementation": "flash_attention_2"
+    }
+  }
+]
