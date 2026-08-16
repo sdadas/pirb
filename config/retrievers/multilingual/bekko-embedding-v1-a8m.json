@@ -1,0 +1,7 @@
+[
+  {
+    "name": "hotchpotch/bekko-embedding-v1-a8m",
+    "bf16": true,
+    "max_seq_length": 8192
+  }
+]
