@@ -1,0 +1,20 @@
+[
+  {
+    "name": "google/embeddinggemma-2",
+    "bf16": true,
+    "max_seq_length": 8192,
+    "batch_size": 16,
+    "q_prefix_name": "Retrieval-query",
+    "p_prefix_name": "Retrieval-document",
+    "tasks": {
+      "~quora": {
+        "q_prefix_name": "SentenceSimilarity",
+        "p_prefix_name": "SentenceSimilarity"
+      }
+    },
+    "config_kwargs": {
+      "vision_config": null,
+      "audio_config": null
+    }
+  }
+]

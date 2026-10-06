@@ -241,6 +241,7 @@ class DenseIndex(SearchIndex):
         self.index_name = encoder["name"].replace("/", "_").replace(".", "_")
         self.model_kwargs = encoder.get("model_kwargs", {})
         self.encode_kwargs = encoder.get("encode_kwargs", {})
+        self.config_kwargs = encoder.get("config_kwargs", {})
         self.padding_side = encoder.get("padding_side", None)
         self.truncate_dim = encoder.get("truncate_dim", None)
         if self._averaging:
@@ -286,6 +287,7 @@ class DenseIndex(SearchIndex):
             model_name_or_path=self.encoder_spec["name"],
             trust_remote_code=trust,
             model_kwargs=model_kwargs,
+            config_kwargs=self.config_kwargs,
             truncate_dim=self.truncate_dim,
             revision=self.revision
         )
