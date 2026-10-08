@@ -1,0 +1,21 @@
+[
+  {
+    "name": "jinaai/jina-reranker-v3.5",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "jinaai/jina-reranker-v3.5",
+      "reranker_type": "jina",
+      "batch_size": 128,
+      "bf16": true
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

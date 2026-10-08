@@ -1,0 +1,22 @@
+[
+  {
+    "name": "nlpai-lab/LAMAR-600m",
+    "type": "hybrid",
+    "k0": 100,
+    "strategy": {
+      "type": "reranker",
+      "reranker_name": "nlpai-lab/LAMAR-600m",
+      "reranker_type": "cross_encoder",
+      "batch_size": 32,
+      "max_seq_length": 8192,
+      "bf16": true
+    },
+    "models": [
+      {
+        "name": "sdadas/mmlw-retrieval-roberta-large",
+        "fp16": true,
+        "q_prefix": "zapytanie: "
+      }
+    ]
+  }
+]

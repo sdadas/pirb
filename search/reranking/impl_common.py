@@ -8,7 +8,7 @@ import numpy as np
 from scipy.special import expit
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, PreTrainedTokenizer, PreTrainedModel, \
-    AutoModelForSeq2SeqLM, AutoModelForCausalLM
+    AutoModelForSeq2SeqLM, AutoModelForCausalLM, AutoModel
 from search.base import SmartTemplate
 from search.reranking import RerankerBase
 from utils.system import install_package
@@ -312,6 +312,7 @@ class JinaReranker(RerankerBase):
         self.max_length = kwargs.get("max_seq_length", 1024)
         self.model_kwargs = kwargs.get("model_kwargs", {})
         self.model = self._load_model()
+        self.v3 = "v3" in self.reranker_name.lower()
 
     def _load_model(self):
         dtype = "auto"
@@ -319,9 +320,9 @@ class JinaReranker(RerankerBase):
             dtype = torch.bfloat16
         elif self.use_fp16:
             dtype = torch.float16
-        model = AutoModelForSequenceClassification.from_pretrained(
+        model = AutoModel.from_pretrained(
             self.reranker_name,
-            torch_dtype=dtype,
+            dtype=dtype,
             trust_remote_code=True,
             **self.model_kwargs
         )
@@ -329,9 +330,17 @@ class JinaReranker(RerankerBase):
         model.eval()
         return model
 
+    def rerank(self, query: str, docs: List[str], proba: bool = False):
+        if self.v3:
+            results = self.model.rerank(query, docs)
+            return [res["relevance_score"] for res in results]
+        else:
+            queries = [query] * len(docs)
+            pairs = list(zip(queries, docs))
+            return self.model.compute_score(pairs, batch_size=self.batch_size, max_length=self.max_length)
+
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
-        pairs = list(zip(queries, docs))
-        return self.model.compute_score(pairs, batch_size=self.batch_size, max_length=self.max_length)
+        raise NotImplementedError()
 
 
 class PylateReranker(RerankerBase):
@@ -501,7 +510,7 @@ class CrossEncoderReranker(RerankerBase):
             dtype = torch.bfloat16
         elif self.use_fp16:
             dtype = torch.float16
-        self.model_kwargs["torch_dtype"] = dtype
+        self.model_kwargs["dtype"] = dtype
         model = CrossEncoder(self.reranker_name, device="cuda",
                              max_length=self.max_length,
                              revision=self.revision,
