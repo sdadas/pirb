@@ -333,6 +333,7 @@ class JinaReranker(RerankerBase):
     def rerank(self, query: str, docs: List[str], proba: bool = False):
         if self.v3:
             results = self.model.rerank(query, docs)
+            results = sorted(results, key=lambda x: x["index"])
             return [res["relevance_score"] for res in results]
         else:
             queries = [query] * len(docs)
@@ -501,6 +502,7 @@ class CrossEncoderReranker(RerankerBase):
         self.model_kwargs = kwargs.get("model_kwargs", {})
         self.trust_remote_code = kwargs.get("trust_remote_code", True)
         self.revision = kwargs.get("revision", None)
+        self.predict_kwargs = kwargs.get("predict_kwargs", {})
         self.model = self._load_model()
 
     def _load_model(self):
@@ -520,6 +522,6 @@ class CrossEncoderReranker(RerankerBase):
 
     def rerank_pairs(self, queries: List[str], docs: List[str], proba: bool = False):
         pairs = list(zip(queries, docs))
-        scores = self.model.predict(pairs, batch_size=self.batch_size, show_progress_bar=False)
+        scores = self.model.predict(pairs, batch_size=self.batch_size, show_progress_bar=False, **self.predict_kwargs)
         return scores.tolist()
 
