@@ -1,4 +1,5 @@
 numpy
+pyarrow<17.0.0
 transformers
 accelerate
 datasets
