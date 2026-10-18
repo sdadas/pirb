@@ -82,3 +82,54 @@ In the official evaluation, we only consider models that:
 1\. Are publicly available
 <br/>
 2\. Have not been trained on the data sources included in PIRB. For datasets split into train, eval and test parts, the use of the training split is acceptable.
+### Decision models as rerankers (S1MB)
+
+Install with `uv sync --extra cu130` (CUDA 13.0), or `uv sync --extra cpu`.
+S1MB is pinned to a source archive in `pyproject.toml`; its backend-specific
+extras are not installed automatically. PIRB retains its own PyTorch versions.
+Additional adapters may need upstream code and dependencies in their environment.
+
+See `config/rerankers/decision/bekko-68m.json` for a complete hybrid configuration.
+Use `reranker_type: "decider"`, `model_adapter` (S1MB class name, or fully qualified
+`s1mb.adapters.module.Class` when ambiguous), and `model_kwargs` for constructor
+arguments. `reranker_name` supplies the model/checkpoint argument unless explicitly
+overridden in `model_kwargs`. Required arguments such as `source` and `revision`
+must be supplied for adapters that require them (including PplxDeciderAdapter).
+
+`decision_template` accepts `state`, `type`, `instructions`, `criteria`, and an
+optional `system_prompt`. Strings support `{query}` and `{passage}`; escape literal
+braces as `{{` and `}}`. State may also be a JSON object or list.
+
+- `score`: criteria are an ordered list of descriptions, assigned values 0..N-1,
+  or objects such as `{"description": "Direct answer", "value": 10}`. The result
+  is the expected value `sum(probability * value)`, not the most likely level.
+- `noul`: criteria must be `{"false": "Not relevant", "true": "Relevant"}`.
+  The result is the probability of `true`.
+
+Both return one float per input pair in its original order. Higher scores rank
+first. `proba=True` leaves these scores unchanged. `batch_size` bounds calls to
+`predict_batch`; adapters without it run sequentially. Backend batching settings
+(e.g. Bekko's `case_batch_size` and `token_budget`) belong in `model_kwargs`.
+Malformed responses and inference failures raise errors rather than assigning
+fabricated relevance scores. Call `close()` or use the reranker as a context manager
+when using it directly.
+
+Run unit tests: `.venv/Scripts/python -m unittest discover -s tests -v`.
+The opt-in smoke test downloads Bekko 68M and checks Score and Noul on relevant
+and unrelated passages. In PowerShell:
+
+```powershell
+$env:PIRB_TEST_BEKKO = "1"
+.venv/Scripts/python -m unittest discover -s tests -v
+```
+
+For a CPU smoke check also set `$env:PIRB_TEST_DEVICE = "cpu"`; the test explicitly
+sets Bekko's `cpu_smoke` flag. The model runs its Hugging Face remote code, pinned
+along with the weights by `revision` in the example configuration.
+
+Verified on Windows with Python 3.12.13, PyTorch 2.12.0+cu130, Transformers 5.10.1,
+and Sentence Transformers 5.5.1 (versions recorded in `uv.lock`). Bekko emits a
+warning because its export used Sentence Transformers 6.1.0; the GPU smoke test
+passes on the locked PIRB stack. This is not the exact upstream Bekko environment.
+The existing `rust-fst` dependency is reported by `uv pip check` as built for a
+different platform on Windows; the decision reranker tests do not use it.

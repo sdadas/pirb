@@ -25,6 +25,7 @@ fabric.properties
 .cache
 .models
 venv
+.venv/
 runlog.txt
 /cache/
 /data/

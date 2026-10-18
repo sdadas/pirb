@@ -8,7 +8,10 @@ class Reranker:
     @staticmethod
     def from_config(config: Dict) -> RerankerBase:
         reranker_type = config.get("reranker_type", "classifier")
-        if reranker_type == "classifier":
+        if reranker_type == "decider":
+            from search.reranking.impl_decision import DecisionReranker
+            reranker = DecisionReranker(**config)
+        elif reranker_type == "classifier":
             reranker = ClassifierReranker(**config)
         elif reranker_type == "vllm":
             reranker = VLLMClassifierReranker(**config)

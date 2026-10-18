@@ -3,6 +3,7 @@ name = "pirb"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "s1mb",
     "numpy",
     "transformers",
     "accelerate",
@@ -31,6 +32,7 @@ cu132 = [
 ]
 
 [tool.uv.sources]
+s1mb = { url = "https://github.com/hotchpotch/S1MB/archive/834fe77826e641206a4a4ae8b0b1c47f2d7e2994.zip", subdirectory = "evaluator" }
 torch = [
     { index = "pytorch-cpu", extra = "cpu" },
     { index = "pytorch-cu130", extra = "cu130" },
