@@ -32,6 +32,8 @@ class AutoIndex:
             rerank_limit = args.rerank_limit if hasattr(args, "rerank_limit") else None
             strategy = config.get("strategy", None)
             return HybridIndex(args.data_dir, index_name, indices, k0, strategy, task, rerank_limit)
+        elif args.mock or index_type == "mock":
+            return MockIndex(task, args.data_dir, field=config.get("field", "candidates"))
         elif index_type == "splade":
             from .splade import SpladeIndex
             return SpladeIndex(config, data_dir=cache_dir)

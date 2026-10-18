@@ -74,8 +74,56 @@ class SearchIndex(ABC):
     def model_dict(self) -> Dict:
         raise NotImplementedError()
 
-    def index_path(self) -> str:
+    def index_path(self) -> Optional[str]:
         raise None
+
+
+class MockIndex(SearchIndex):
+
+    def __init__(self, task: RetrievalTask, data_dir: str, field: str = "candidates"):
+        self.field = field
+        self.data_dir = data_dir
+        self.results = self._load_results(task)
+
+    def _load_results(self, task: RetrievalTask):
+        results = {}
+        with open(task.queries_path(self.data_dir), "r", encoding="utf-8") as input_file:
+            for line in input_file:
+                value = json.loads(line)
+                results[value["id"]] = value[self.field]
+        return results
+
+    def exists(self) -> bool:
+        return True
+
+    def build(self, docs: Iterable[IndexInput]):
+        pass
+
+    def search(self, queries: List[IndexInput], k: int, batch_size=1024, verbose=True, cache_prefix=None,
+               overwrite=False) -> Dict[str, List[IndexResult]]:
+        results = {}
+        for query in queries:
+            query_results = self.results[query.id]
+            results[query.id] = [
+                IndexResult(doc_id, 1.0 / (rank + 1))
+                for rank, doc_id in enumerate(query_results[:k])
+            ]
+        return results
+
+    def results_exist(self, k: int, cache_prefix: str):
+        return False
+
+    def name(self):
+        return f"mock_{self.field}"
+
+    def __len__(self):
+        return 0
+
+    def model_dict(self) -> Dict:
+        return {"name": "mock", "type": "mock", "field": self.field}
+
+    def index_path(self) -> Optional[str]:
+        return None
 
 
 class SmartTemplate:

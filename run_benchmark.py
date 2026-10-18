@@ -5,7 +5,7 @@ import shutil
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 import torch
 from sklearn.metrics import ndcg_score
 from tqdm import tqdm
@@ -58,17 +58,21 @@ class BenchmarkArgs:
         default=False,
         metadata={"help": "Overwrite any cache or results even if exists"}
     )
-    query_limit: int = field(
+    query_limit: Optional[int] = field(
         default=None,
         metadata={"help": "Maximum number of queries to use for evaluation on each dataset"}
     )
-    rerank_limit: int = field(
+    rerank_limit: Optional[int] = field(
         default=None,
         metadata={"help": "Maximum number of retrieved docs to sort using reranker (all docs are sorted by default)"}
     )
     rm: bool = field(
         default=False,
         metadata={"help": "Remove cached indexes after evaluation"}
+    )
+    mock: bool = field(
+        default=False,
+        metadata={"help": "Use mock retriever"}
     )
 
 
@@ -166,8 +170,11 @@ class RetrievalEvaluator:
         res = {"task_id": task.task_id, "group_id": task.group_id, "model": index.name(),"metrics": metrics}
         if "strategy" in metadata.keys():
             metadata = dict(metadata)
-            metadata["strategy"] = {"type": metadata["strategy"]["type"]}
+            strategy = metadata["strategy"]
+            metadata["strategy"] = {key: val for key, val in strategy.items() if key in ("type", "reranker_type")}
         if metadata is not None:
+            if self.args.mock:
+                metadata["mock"] = True
             res["metadata"] = metadata
         res["timestamp"] = datetime.now().strftime("%d/%m/%Y,%H:%M:%S")
         with open("runlog.txt", "a", encoding="utf-8") as output_file:
