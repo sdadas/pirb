@@ -4,8 +4,13 @@ import ast
 import importlib
 import inspect
 import json
+import math
+import os
+import re
 from functools import lru_cache
 from pathlib import Path
+
+from data import IndexResult
 
 from s1mb.data import InferenceCase, Option, Question, check_probabilities
 
@@ -44,6 +49,11 @@ def render(value, query, passage):
 
 class DecisionReranker(RerankerBase):
     def __init__(self, **config):
+        self.save_scores = config.get("save_scores", True)
+        if not isinstance(self.save_scores, bool):
+            raise ValueError("save_scores must be a boolean")
+        self._score_cache = {}
+        self._score_log = None
         self.template = config["decision_template"]
         self.task = self.template["type"]
         self.batch_size = config.get("batch_size", 32)
@@ -66,6 +76,62 @@ class DecisionReranker(RerankerBase):
         except TypeError as exc:
             raise ValueError(f"Invalid model_kwargs for {adapter_class.__name__}: {exc}") from exc
         self.adapter = adapter_class(**model_kwargs)
+
+    def configure_score_log(self, name):
+        """Attach benchmark identity; plain text-only calls have no dataset IDs."""
+        if not self.save_scores:
+            return
+        safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).rstrip(". ")
+        if not safe_name or safe_name in (".", ".."):
+            raise ValueError("Invalid configuration name for score log")
+        path = Path("_logs") / f"{safe_name}.jsonl"
+        if self._score_log == path:
+            return
+        self._score_cache = {}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # A killed append may leave an incomplete final line. Only that tail is discarded.
+        with path.open("a+b") as stream:
+            stream.seek(0)
+            while True:
+                offset = stream.tell()
+                line = stream.readline()
+                if not line:
+                    break
+                if not line.endswith(b"\n"):
+                    stream.truncate(offset)
+                    break
+                try:
+                    row = json.loads(line)
+                    docs, scores = row["docs"], row["scores"]
+                    if (not isinstance(docs, list) or not isinstance(scores, list)
+                            or len(docs) != len(scores) or len(set(docs)) != len(docs)
+                            or not all(isinstance(d, str) for d in docs)
+                            or not all(isinstance(s, (int, float)) and not isinstance(s, bool)
+                                       and math.isfinite(s) for s in scores)
+                            or not isinstance(row["task_id"], str) or not isinstance(row["id"], str)):
+                        raise ValueError("Invalid score record")
+                    self._score_cache[row["task_id"], row["id"]] = [IndexResult(d, s) for d, s in zip(docs, scores)]
+                except (ValueError, KeyError, TypeError) as exc:
+                    raise ValueError(f"Invalid score log {path} at byte {offset}") from exc
+        self._score_log = path
+
+    def load_scores(self, task_id, query_id):
+        """Return a completed query, or None when inference is needed."""
+        return self._score_cache.get((task_id, query_id)) if self.save_scores else None
+
+    def store_scores(self, task_id, query_id, results):
+        """Append the final top-k ranking only after the whole query succeeds."""
+        if not self.save_scores:
+            return
+        if self._score_log is None:
+            raise ValueError("Call configure_score_log with the configuration name first")
+        row = {"task_id": task_id, "id": query_id,
+               "docs": [r.id for r in results], "scores": [r.score for r in results]}
+        with self._score_log.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        self._score_cache[task_id, query_id] = list(results)
 
     def _case(self, query, passage, index):
         template = render(self.template, query, passage)

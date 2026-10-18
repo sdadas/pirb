@@ -82,6 +82,8 @@ class RerankerHybrid(HybridStrategy):
         reranker_name = self.args['reranker_name']
         logging.info(f"Loading {reranker_type} reranker {reranker_name}")
         self.reranker = Reranker.from_config(self.args)
+        if hasattr(self.reranker, "configure_score_log"):
+            self.reranker.configure_score_log(getattr(self, "config_name", reranker_name))
         if isinstance(self.reranker, LLMReranker):
             self.batch_size = 1024 * 1024
 
@@ -175,6 +177,9 @@ class RerankerHybrid(HybridStrategy):
         query = queries[qid].text
         results = []
         start_time = time.time()
+        if hasattr(self.reranker, "load_scores"):
+            if (cached := self.reranker.load_scores(self.task.task_id, qid)) is not None:
+                return cached[:k]
         for i in range(0, len(docids), self.batch_size):
             batch = docids[i:i + self.batch_size]
             docs = [passages[docid].text for docid in batch]
@@ -183,6 +188,8 @@ class RerankerHybrid(HybridStrategy):
                 outputs = [outputs] if not isinstance(outputs, list) else outputs
             results.extend([IndexResult(docid, float(score)) for docid, score in zip(batch, outputs)])
         results.sort(key=lambda v: -v.score)
+        if hasattr(self.reranker, "store_scores"):
+            self.reranker.store_scores(self.task.task_id, qid, results)
         results = results[:k]
         self._stats_queries += 1
         self._stats_elapsed += (time.time() - start_time)
@@ -348,6 +355,7 @@ class HybridIndex(SearchIndex):
         else:
             self.strategy = self._load_strategy(strategy, rerank_limit)
         self.strategy.task = task
+        self.strategy.config_name = hybrid_name
         self.strategy.data_dir = data_dir
         self.k0 = k0
 
