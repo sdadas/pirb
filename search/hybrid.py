@@ -199,7 +199,7 @@ class RerankerHybrid(HybridStrategy):
         q = stats.get("queries", 0)
         t = stats.get("reranking_time", 0.0) + self._stats_elapsed
         stats["reranking_time"] = t
-        stats["reranking_qps"] = q / t
+        stats["reranking_qps"] = q / (t if t > 0 else 1)
         if isinstance(self.reranker, LLMReranker):
             for key, val in asdict(self.reranker.usage).items():
                 stats[f"{task.task_id}_{key}"] = val

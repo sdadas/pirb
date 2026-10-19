@@ -7,19 +7,42 @@ import json
 import math
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 
 from data import IndexResult
 
 from s1mb.data import InferenceCase, Option, Question, check_probabilities
+from s1mb.adapters.typesafe import TypeSafeAdapter
 
 from search.reranking.base import RerankerBase
+
+
+class OpenRouterAdapter(TypeSafeAdapter):
+    """Use S1MB's TypeSafe protocol through OpenRouter's System One API."""
+
+    provider = "openrouter"
+    api_key_env = "OPENROUTER_API_KEY"
+    base_url = "https://openrouter.ai"
+    endpoint = "/api/v1/systemone"
+
+    def __init__(self, model: str, case_batch_size: int = 4):
+        if isinstance(case_batch_size, bool) or not isinstance(case_batch_size, int) or not 1 <= case_batch_size <= 32:
+            raise ValueError("case_batch_size must be an integer within 1..32")
+        self.case_batch_size = case_batch_size
+        super().__init__(model)
+
+    def predict_batch(self, cases):
+        with ThreadPoolExecutor(max_workers=self.case_batch_size) as pool:
+            return list(pool.map(self.predict, cases))
 
 
 @lru_cache(maxsize=None)
 def resolve_adapter(name):
     """Find a class without importing every optional S1MB backend."""
+    if name == "OpenRouterAdapter":
+        return OpenRouterAdapter
     import s1mb.adapters
 
     matches = []
