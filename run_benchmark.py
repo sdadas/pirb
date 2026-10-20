@@ -168,14 +168,16 @@ class RetrievalEvaluator:
 
     def _log_score(self, task: RetrievalTask, index: SearchIndex, metrics: Dict, metadata: Dict):
         res = {"task_id": task.task_id, "group_id": task.group_id, "model": index.name(),"metrics": metrics}
+        metadata = metadata.copy() if metadata is not None else {}
         if "strategy" in metadata.keys():
             metadata = dict(metadata)
             strategy = metadata["strategy"]
             metadata["strategy"] = {key: val for key, val in strategy.items() if key in ("type", "reranker_type")}
-        if metadata is not None:
-            if self.args.mock:
-                metadata["mock"] = True
-            res["metadata"] = metadata
+        if "tasks" in metadata:
+            del metadata["tasks"]
+        if self.args.mock:
+            metadata["mock"] = True
+        res["metadata"] = metadata
         res["timestamp"] = datetime.now().strftime("%d/%m/%Y,%H:%M:%S")
         with open("runlog.txt", "a", encoding="utf-8") as output_file:
             fcntl.flock(output_file, fcntl.LOCK_EX)
