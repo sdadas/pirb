@@ -81,8 +81,30 @@ class RetrievalEvaluator:
     def __init__(self, args: BenchmarkArgs):
         self.args: BenchmarkArgs = args
         self.stats = {}
+        self.recall_k = args.recall_k
+
+    def _load_candidates(self, task: RetrievalTask):
+        results = {}
+        with open(task.queries_path(self.args.data_dir), "r", encoding="utf-8") as input_file:
+            for line in input_file:
+                value = json.loads(line)
+                results[value["id"]] = value["candidates"]
+        return results
+
+    def _filter_candidates(self, results: Dict[str, List[IndexResult]], candidates: Dict):
+        for query_id in results.keys():
+            query_candidates = set(candidates[query_id])
+            query_results = results[query_id]
+            results[query_id] = [candidate for candidate in query_results if candidate.id in query_candidates]
+        return results
+
+    def _count_passages(self, task: RetrievalTask):
+        return len(list(task.passages(self.args.data_dir)))
+
 
     def eval_task(self, task: RetrievalTask, index: SearchIndex, metadata=None):
+        candidates = self._load_candidates(task)
+        self.args.recall_k = min(self.recall_k, self._count_passages(task))
         cache_prefix = task.task_id
         needs_rebuild = not index.exists() and not index.results_exist(self.args.recall_k, cache_prefix)
         task.set_limit_queries(self.args.query_limit)
@@ -91,6 +113,7 @@ class RetrievalEvaluator:
         chunk_doc_mapping = task.get_chunk_document_mapping(self.args.data_dir)
         queries = list(task.queries(self.args.data_dir))
         results = index.search(queries, self.args.recall_k, cache_prefix=cache_prefix, overwrite=self.args.overwrite)
+        results = self._filter_candidates(results, candidates)
         mrr_sum, total = 0.0, 0
         acc_correct = Counter()
         ndcg_sum = 0.0
