@@ -1,6 +1,6 @@
 [
   {
-    "name": "OPI-PIB/PolDense-400M",
+    "name": "OPI-PIB/PolDense-1B",
     "bf16": true,
     "q_prefix": "[query]: ",
     "batch_size": 32,
