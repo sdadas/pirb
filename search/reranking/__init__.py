@@ -1,6 +1,7 @@
 from search.reranking.base import *
 from search.reranking.impl_common import *
 from search.reranking.impl_llm import *
+from search.reranking.impl_decision import *
 
 
 class Reranker:
@@ -34,6 +35,8 @@ class Reranker:
             reranker = TrueskillReranker(**config)
         elif reranker_type == "cross_encoder":
             reranker = CrossEncoderReranker(**config)
+        elif reranker_type == "decider_api":
+            reranker = DecisionReranker(**config)
         else:
             raise AssertionError(f"Unknown reranker type {reranker_type}")
         return reranker

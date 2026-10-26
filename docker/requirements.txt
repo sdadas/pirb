@@ -14,3 +14,4 @@ faiss-cpu
 xgboost
 pytrec-eval
 flash-attn
+openai

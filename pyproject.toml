@@ -14,7 +14,8 @@ dependencies = [
     "rust-fst",
     "bm25s",
     "faiss-cpu",
-    "xgboost"
+    "xgboost",
+    "openai"
 ]
 
 [project.optional-dependencies]
