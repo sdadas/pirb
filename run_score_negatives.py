@@ -13,16 +13,6 @@ from data import RawJsonlTask, IndexInput, RetrievalTask, IndexResult
 from search import SearchIndex, AutoIndex
 
 
-FLAN_PRP_PROMPT = '''Question: Given a query "{0}", which of the following two passages is more relevant to the query?
-
-passage A: {1}
-
-passage B: {2}
-
-Output the identifier of the more relevant passage. The answer must be passage A or passage B.
-Answer:'''
-
-
 @dataclass
 class HardNegsArgs:
     retrievers: str = field(
