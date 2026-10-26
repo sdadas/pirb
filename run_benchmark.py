@@ -211,7 +211,8 @@ def _add_index_path(paths: List, index):
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.INFO)
     logging.root.setLevel(logging.INFO)
-    logging.getLogger("httpx").setLevel(logging.ERROR)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     parser = HfArgumentParser([BenchmarkArgs])
     args = parser.parse_args_into_dataclasses()[0]
     encoders = _load_models(args.models_config)

@@ -220,6 +220,7 @@ if __name__ == '__main__':
     logging.root.setLevel(logging.INFO)
     logging.getLogger("openai").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     parser = HfArgumentParser([RescoringArgs])
     rescoring_args = parser.parse_args_into_dataclasses()[0]
     RetrievalTask.TEXT_FIELD = rescoring_args.text_field

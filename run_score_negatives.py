@@ -307,6 +307,8 @@ class PermutationNegsBuilder(HardNegsBuilder):
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.INFO)
     logging.root.setLevel(logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     parser = HfArgumentParser([HardNegsArgs])
     args = parser.parse_args_into_dataclasses()[0]
     RetrievalTask.TEXT_FIELD = args.text_field
