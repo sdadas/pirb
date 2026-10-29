@@ -259,6 +259,16 @@ class DenseIndex(SearchIndex):
         self.encoder: Optional[SentenceTransformer] = None
         self.benchmark_stats = None
 
+    def set_encoding_batch_size(self, batch_size: int):
+        if batch_size <= 0:
+            raise ValueError("Encoding batch size must be greater than zero")
+        self._st_bs = batch_size
+        # Keep the source config intact, including dataset-specific overrides.
+        self.encoder_spec = {**self.encoder_spec, "batch_size": batch_size}
+        self.encode_kwargs = {**self.encode_kwargs, "batch_size": batch_size}
+        if isinstance(self.encoder, (OpenAIEmbeddings, VLLMEmbeddings)):
+            self.encoder.batch_size = batch_size
+
     def _create_backend(self, encoder_spec: Dict):
         backend = encoder_spec.get("backend", "raw")
         if isinstance(backend, str):

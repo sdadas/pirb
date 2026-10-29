@@ -63,6 +63,10 @@ class BenchmarkArgs:
         default=True,
         metadata={"help": "Log DenseIndex performance; rebuild indexes and bypass cached results"}
     )
+    stats_batch_size: int = field(
+        default=16,
+        metadata={"help": "Override DenseIndex encoding batch size when log_stats is enabled"}
+    )
     query_limit: Optional[int] = field(
         default=None,
         metadata={"help": "Maximum number of queries to use for evaluation on each dataset"}
@@ -84,6 +88,8 @@ class BenchmarkArgs:
 class RetrievalEvaluator:
 
     def __init__(self, args: BenchmarkArgs):
+        if args.stats_batch_size <= 0:
+            raise ValueError("stats_batch_size must be greater than zero")
         self.args: BenchmarkArgs = args
         self.stats = {}
         self.performance_stats = []
@@ -93,6 +99,7 @@ class RetrievalEvaluator:
         if self.args.log_stats:
             from search.dense import DenseIndex
             if isinstance(index, DenseIndex):
+                index.set_encoding_batch_size(self.args.stats_batch_size)
                 measurement = BenchmarkStats()
                 index.benchmark_stats = measurement
         cache_prefix = task.task_id
@@ -212,6 +219,7 @@ class RetrievalEvaluator:
         if self.performance_stats:
             summary = {
                 "type": "stats_summary", "model": metadata["name"],
+                "stats_batch_size": self.args.stats_batch_size,
                 "datasets": len(self.performance_stats),
                 "stats": summarize_stats(self.performance_stats),
             }
