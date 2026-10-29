@@ -14,6 +14,7 @@ from transformers import HfArgumentParser
 from data import RetrievalTask, Benchmark, IndexResult
 from search import SearchIndex, AutoIndex
 from benchmark_stats import BenchmarkStats, summarize_stats
+from encoder_cache import EncoderCache
 
 # patch fcntl on Windows
 try:
@@ -64,7 +65,7 @@ class BenchmarkArgs:
         metadata={"help": "Log DenseIndex performance; rebuild indexes and bypass cached results"}
     )
     stats_batch_size: int = field(
-        default=16,
+        default=32,
         metadata={"help": "Override DenseIndex encoding batch size when log_stats is enabled"}
     )
     query_limit: Optional[int] = field(
@@ -282,13 +283,15 @@ if __name__ == '__main__':
     stats_summaries = []
     for encoder in encoders:
         ndcg_tasks = 0.0
-        for task in benchmark.tasks:
-            print(f"Results for task: {task.task_id.upper()}")
-            model = AutoIndex.from_config(encoder, task, args)
-            _add_index_path(index_paths, model)
-            ndcg_tasks += evaluator.eval_task(task, model, metadata=encoder)
-            del model
-            torch.cuda.empty_cache()
+        with EncoderCache() as encoder_cache:
+            for task in benchmark.tasks:
+                print(f"Results for task: {task.task_id.upper()}")
+                model = AutoIndex.from_config(encoder, task, args, encoder_cache=encoder_cache)
+                _add_index_path(index_paths, model)
+                ndcg_tasks += evaluator.eval_task(task, model, metadata=encoder)
+                del model
+                torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
         print(evaluator.stats)
         summary = evaluator.log_stats_summary(encoder)
         if summary is not None:

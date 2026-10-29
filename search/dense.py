@@ -235,7 +235,8 @@ class TextAveragingEncoder:
 
 class DenseIndex(SearchIndex):
 
-    def __init__(self, data_dir: str, encoder: Dict):
+    def __init__(self, data_dir: str, encoder: Dict, encoder_cache=None):
+        self.encoder_cache = encoder_cache
         self._st_bs = encoder.get("batch_size", 32)
         self._averaging = encoder.get("enable_averaging", False)
         self.data_dir = data_dir
@@ -280,12 +281,16 @@ class DenseIndex(SearchIndex):
 
     def _load_encoder(self):
         if self.encoder is not None: return
+        if self.encoder_cache is None:
+            self.encoder = self._create_encoder()
+        else:
+            self.encoder = self.encoder_cache.get_or_load(self.encoder_spec, self._create_encoder)
+
+    def _create_encoder(self):
         if self.encoder_spec.get("type", None) == "api":
-            self.encoder = OpenAIEmbeddings(self.encoder_spec)
-            return
+            return OpenAIEmbeddings(self.encoder_spec)
         if self.encoder_spec.get("type", None) == "vllm":
-            self.encoder = VLLMEmbeddings(self.encoder_spec)
-            return
+            return VLLMEmbeddings(self.encoder_spec)
         torch_dtype = torch.float32
         if self.encoder_spec.get("fp16", False):
             torch_dtype = torch.float16
@@ -315,7 +320,7 @@ class DenseIndex(SearchIndex):
         self._check_encode_kwargs(model)
         if self._averaging:
             model = TextAveragingEncoder(model)
-        self.encoder = model
+        return model
 
     def _check_encode_kwargs(self, model: SentenceTransformer):
         if len(self.encode_kwargs) == 0:

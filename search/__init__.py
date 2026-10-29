@@ -8,7 +8,7 @@ from data import RetrievalTask
 class AutoIndex:
 
     @staticmethod
-    def from_config(config: Dict, task: RetrievalTask, args):
+    def from_config(config: Dict, task: RetrievalTask, args, encoder_cache=None):
         # noinspection PyTypeChecker
         cache_dir: str = os.path.join(args.cache_dir, task.task_cache_name())
         index_name = config["name"]
@@ -27,7 +27,7 @@ class AutoIndex:
         if index_type == "hybrid":
             from .hybrid import HybridIndex
             child_configs = config["models"]
-            indices = [AutoIndex.from_config(child_config, task, args) for child_config in child_configs]
+            indices = [AutoIndex.from_config(child_config, task, args, encoder_cache) for child_config in child_configs]
             k0 = config.get("k0", 100)
             rerank_limit = args.rerank_limit if hasattr(args, "rerank_limit") else None
             strategy = config.get("strategy", None)
@@ -50,7 +50,7 @@ class AutoIndex:
             return LateInteractionIndex(data_dir=cache_dir, encoder=config)
         else:
             from .dense import DenseIndex
-            return DenseIndex(data_dir=cache_dir, encoder=config)
+            return DenseIndex(data_dir=cache_dir, encoder=config, encoder_cache=encoder_cache)
 
     @staticmethod
     def set_nested_value(d: Dict, key: str, value: Any):
