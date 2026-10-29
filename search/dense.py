@@ -4,6 +4,7 @@ import os
 import random
 import traceback
 from functools import partial
+from contextlib import nullcontext
 from typing import List, Iterable, Dict, Optional, Union, Any, Callable
 import numpy as np
 import torch
@@ -256,6 +257,7 @@ class DenseIndex(SearchIndex):
         self.passage_prefix_name: Optional[str] = encoder.get("p_prefix_name", None)
         self.revision = encoder.get("revision", None)
         self.encoder: Optional[SentenceTransformer] = None
+        self.benchmark_stats = None
 
     def _create_backend(self, encoder_spec: Dict):
         backend = encoder_spec.get("backend", "raw")
@@ -363,12 +365,16 @@ class DenseIndex(SearchIndex):
             batch = texts[i:i + mega_batch_size]
             kwargs = self._encode_kwargs(query=False)
             batch_emb = self.encoder.encode(batch, **kwargs)
+            if self.benchmark_stats is not None:
+                self.benchmark_stats.values["embedding_dim"] = int(batch_emb.shape[-1])
             idx += 1
             if self.backend.supports_tensors():
                 embeddings.append(batch_emb.detach().cpu())
             else:
                 embeddings.append(batch_emb)
         self.backend.build(embeddings, ids)
+        if self.benchmark_stats is not None:
+            self.benchmark_stats.values["documents"] += len(ids)
 
     def search(self, queries: List[IndexInput], k: int, batch_size=1024, verbose=True, cache_prefix=None,
                overwrite=False) -> Dict:
@@ -387,7 +393,10 @@ class DenseIndex(SearchIndex):
         texts = [val.text for val in batch]
         qids = [val.id for val in batch]
         kwargs = self._encode_kwargs(query=True)
-        emb = self.encoder.encode(texts, show_progress_bar=False, **kwargs)
+        measurement = (self.benchmark_stats.measure("query_encoding_seconds")
+                       if self.benchmark_stats is not None else nullcontext())
+        with measurement:
+            emb = self.encoder.encode(texts, show_progress_bar=False, **kwargs)
         return self.backend.search(emb, qids, top_k)
 
     def name(self):

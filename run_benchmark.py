@@ -13,6 +13,7 @@ from transformers import HfArgumentParser
 
 from data import RetrievalTask, Benchmark, IndexResult
 from search import SearchIndex, AutoIndex
+from benchmark_stats import BenchmarkStats, summarize_stats
 
 # patch fcntl on Windows
 try:
@@ -58,6 +59,10 @@ class BenchmarkArgs:
         default=False,
         metadata={"help": "Overwrite any cache or results even if exists"}
     )
+    log_stats: bool = field(
+        default=True,
+        metadata={"help": "Log DenseIndex performance; rebuild indexes and bypass cached results"}
+    )
     query_limit: Optional[int] = field(
         default=None,
         metadata={"help": "Maximum number of queries to use for evaluation on each dataset"}
@@ -81,16 +86,39 @@ class RetrievalEvaluator:
     def __init__(self, args: BenchmarkArgs):
         self.args: BenchmarkArgs = args
         self.stats = {}
+        self.performance_stats = []
 
     def eval_task(self, task: RetrievalTask, index: SearchIndex, metadata=None):
+        measurement = None
+        if self.args.log_stats:
+            from search.dense import DenseIndex
+            if isinstance(index, DenseIndex):
+                measurement = BenchmarkStats()
+                index.benchmark_stats = measurement
         cache_prefix = task.task_id
         needs_rebuild = not index.exists() and not index.results_exist(self.args.recall_k, cache_prefix)
         task.set_limit_queries(self.args.query_limit)
-        if self.args.overwrite or needs_rebuild:
+        if measurement is not None:
+            # Model startup is excluded from throughput, but included in VRAM peak.
+            index._load_encoder()
+            with measurement.measure("indexing_seconds"):
+                index.build(task.passages(self.args.data_dir))
+        elif self.args.overwrite or needs_rebuild:
             index.build(task.passages(self.args.data_dir))
         chunk_doc_mapping = task.get_chunk_document_mapping(self.args.data_dir)
         queries = list(task.queries(self.args.data_dir))
-        results = index.search(queries, self.args.recall_k, cache_prefix=cache_prefix, overwrite=self.args.overwrite)
+        if measurement is not None:
+            # Exclude result-cache serialization from retrieval throughput.
+            with measurement.measure("search_seconds"):
+                results = index.search(queries, self.args.recall_k, overwrite=True)
+            measurement.values["queries"] = len(queries)
+            performance = measurement.snapshot()
+            self.performance_stats.append(performance)
+            index.benchmark_stats = None
+            index.save_results_to_cache(self.args.recall_k, cache_prefix, results)
+        else:
+            performance = None
+            results = index.search(queries, self.args.recall_k, cache_prefix=cache_prefix, overwrite=self.args.overwrite)
         mrr_sum, total = 0.0, 0
         acc_correct = Counter()
         ndcg_sum = 0.0
@@ -127,7 +155,7 @@ class RetrievalEvaluator:
             f"MRR@{self.args.ndcg_k}": mrr,
             f"NDCG@{self.args.ndcg_k}": ndcg,
         }
-        self._log_score(task, index, metrics, metadata)
+        self._log_score(task, index, metrics, metadata, performance)
         self.stats["queries"] = self.stats.get("queries", 0) + len(queries)
         index.accumulate_stats(self.stats, task)
         print(", ".join([f"{k}: {v:.4f}%" for k, v in metrics.items() if not isinstance(v, list)]) + f" ({index.name()})")
@@ -166,9 +194,11 @@ class RetrievalEvaluator:
                 found += 1
         return min(found / len(relevant_set), 1.0)
 
-    def _log_score(self, task: RetrievalTask, index: SearchIndex, metrics: Dict, metadata: Dict):
+    def _log_score(self, task: RetrievalTask, index: SearchIndex, metrics: Dict, metadata: Dict, performance=None):
         res = {"task_id": task.task_id, "group_id": task.group_id, "model": index.name(),"metrics": metrics}
-        if "strategy" in metadata.keys():
+        if performance is not None:
+            res["stats"] = performance
+        if metadata is not None and "strategy" in metadata:
             metadata = dict(metadata)
             strategy = metadata["strategy"]
             metadata["strategy"] = {key: val for key, val in strategy.items() if key in ("type", "reranker_type")}
@@ -176,8 +206,23 @@ class RetrievalEvaluator:
             if self.args.mock:
                 metadata["mock"] = True
             res["metadata"] = metadata
+        self._write_log(res)
+
+    def log_stats_summary(self, metadata):
+        if self.performance_stats:
+            summary = {
+                "type": "stats_summary", "model": metadata["name"],
+                "datasets": len(self.performance_stats),
+                "stats": summarize_stats(self.performance_stats),
+            }
+            self._write_log(summary, "stats_runlog.txt")
+            self.performance_stats = []
+            return summary
+
+    @staticmethod
+    def _write_log(res, path="runlog.txt"):
         res["timestamp"] = datetime.now().strftime("%d/%m/%Y,%H:%M:%S")
-        with open("runlog.txt", "a", encoding="utf-8") as output_file:
+        with open(path, "a", encoding="utf-8") as output_file:
             fcntl.flock(output_file, fcntl.LOCK_EX)
             json.dump(res, output_file, ensure_ascii=False)
             output_file.write("\n")
@@ -226,6 +271,7 @@ if __name__ == '__main__':
     logging.info("Running evaluation on %d datasets", len(benchmark))
     evaluator = RetrievalEvaluator(args)
     index_paths = []
+    stats_summaries = []
     for encoder in encoders:
         ndcg_tasks = 0.0
         for task in benchmark.tasks:
@@ -236,6 +282,9 @@ if __name__ == '__main__':
             del model
             torch.cuda.empty_cache()
         print(evaluator.stats)
+        summary = evaluator.log_stats_summary(encoder)
+        if summary is not None:
+            stats_summaries.append(summary)
         evaluator.stats = {}
         print(f"Average NDCG@{args.ndcg_k} for {len(benchmark)} tasks: {ndcg_tasks / len(benchmark):.2f}")
         max_memory = torch.cuda.max_memory_reserved()
@@ -246,3 +295,5 @@ if __name__ == '__main__':
             if index_path is not None and os.path.isdir(index_path):
                 logging.info(index_path)
                 shutil.rmtree(index_path)
+    for summary in stats_summaries:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
