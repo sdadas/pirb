@@ -325,7 +325,10 @@ class DenseIndex(SearchIndex):
     def _check_encode_kwargs(self, model: SentenceTransformer):
         if len(self.encode_kwargs) == 0:
             return
-        module_kwargs = model.module_kwargs["0"]
+        if model.module_kwargs is None:
+            model.module_kwargs = {}
+        module_name = next(iter(model.named_children()))[0]
+        module_kwargs = model.module_kwargs.get(module_name)
         if module_kwargs is None:
             module_kwargs = []
         new_module_kwargs = module_kwargs.copy()
@@ -333,7 +336,7 @@ class DenseIndex(SearchIndex):
             if key not in module_kwargs:
                 logging.info(f"'{key}' not in default encode kwargs")
                 new_module_kwargs.append(key)
-        model.module_kwargs["0"] = new_module_kwargs
+        model.module_kwargs[module_name] = new_module_kwargs
 
     def _encode_kwargs(self, query: bool) -> Dict:
         kwargs = {
