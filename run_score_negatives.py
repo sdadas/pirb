@@ -30,6 +30,10 @@ class HardNegsArgs:
     output_name: str = field(
         metadata={"help": "Name of the output file"},
     )
+    output_continue: bool = field(
+        default=False,
+        metadata={"help": "Preserve existing output and process only missing query IDs"},
+    )
     data_dir: str = field(
         default="data2",
         metadata={"help": "Directory where task data is stored"},
@@ -69,6 +73,8 @@ class HardNegsBuilder:
     def __init__(self, args: HardNegsArgs):
         self.args = args
         self.task = RawJsonlTask(self.args.task_name)
+        self.output_path = os.path.join(self.args.data_dir, self.task.task_id, self.args.output_name)
+        self._check_output()
         self.task.prepare_task(self.args.data_dir)
         self.retriever_keys = [val.strip() for val in self.args.retrievers_keys.split(",")]
         self.indices: List[SearchIndex]
@@ -92,21 +98,37 @@ class HardNegsBuilder:
         self.reraker = RerankerHybrid(**conf)
 
     def build(self):
-        passages: Dict[str, str] = {val.id : val.text for val in self.task.passages(self.args.data_dir)}
+        self._check_output()
+        processed_ids = set()
+        needs_newline = False
+        if self.args.output_continue and os.path.exists(self.output_path):
+            with open(self.output_path, "r", encoding="utf-8") as existing_file:
+                for line in existing_file:
+                    if line.strip():
+                        processed_ids.add(json.loads(line)["query_id"])
+                    needs_newline = not line.endswith("\n")
         queries: List[IndexInput] = list(self.task.queries(self.args.data_dir))
         if self.args.queries_end_idx is None:
             self.args.queries_end_idx = len(queries)
         queries = queries[self.args.queries_start_idx:self.args.queries_end_idx]
+        queries = [query for query in queries if query.id not in processed_ids]
+        if not queries:
+            logging.info("No queries left to process")
+            with open(self.output_path, "a" if self.args.output_continue else "x", encoding="utf-8"):
+                pass
+            return
+        passages: Dict[str, str] = {val.id : val.text for val in self.task.passages(self.args.data_dir)}
         scores_path = os.path.join(self.args.data_dir, self.task.task_id, "scores.jsonl")
         if os.path.exists(scores_path) and self.args.use_cached_scores:
             index_results = self._load_retrieved_docs_from_scores(scores_path, queries)
         else:
             index_results = self._run_retrievers(queries)
         self.create_reranker()
-        output_path = os.path.join(self.args.data_dir, self.task.task_id, self.args.output_name)
         pbar = tqdm(total=len(queries))
         ndcg_count, ndcg_sum = 0, 0
-        with open(output_path, "w", encoding="utf-8") as output_file:
+        with open(self.output_path, "a" if self.args.output_continue else "x", encoding="utf-8") as output_file:
+            if needs_newline:
+                output_file.write("\n")
             for query in queries:
                 pbar.update(1)
                 out = self.process_query(query, passages, index_results)
@@ -119,6 +141,13 @@ class HardNegsBuilder:
                     ndcg_sum += ndcg
                     pbar.set_postfix(ndcg=ndcg_sum / ndcg_count)
         pbar.close()
+
+    def _check_output(self):
+        if os.path.exists(self.output_path) and not self.args.output_continue:
+            raise FileExistsError(
+                f"Output already exists: {self.output_path}. "
+                "Use --output_continue True to process only missing records."
+            )
 
     def _run_retrievers(self, queries: List[IndexInput]):
         logging.info(f"Running retrieval for {len(queries)} queries")
