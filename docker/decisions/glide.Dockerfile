@@ -7,6 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HF_HOME=/cache/huggingface \
     TRITON_CACHE_DIR=/cache/triton \
+    PYTHONPATH=/opt/glide \
     GLIDE_MODEL=fastino/GLiDE-27B
 
 # Triton compiles GPU kernels at runtime. PyTorch's pip dependencies supply CUDA.
@@ -18,9 +19,12 @@ WORKDIR /opt/glide
 # Download only the official runtime, dependencies and license files, not weights.
 RUN pip install "huggingface_hub==1.33.0" \
     && hf download "${GLIDE_CODE_REPO}" --revision "${GLIDE_CODE_REVISION}" \
-        --local-dir /opt/glide --include "glide/*.py" "requirements.txt" "LICENSE" "NOTICE" "licenses/*" \
+        --local-dir /opt/glide --include "glide/*.py" --include "requirements.txt" \
+        --include "LICENSE" --include "NOTICE" --include "licenses/*" \
+    && test -f glide/__init__.py && test -f glide/server.py \
     && pip install -r requirements.txt \
-    && pip check
+    && pip check \
+    && python -m glide.server --help
 
 LABEL org.opencontainers.image.source="https://huggingface.co/${GLIDE_CODE_REPO}" \
       org.opencontainers.image.revision="${GLIDE_CODE_REVISION}"
