@@ -1,59 +1,83 @@
+import json
 import os
-from collections import defaultdict
-from typing import List, Dict
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import numpy as np
-from seismic import SeismicIndex
-from backend import SparseBackend
+from backend.base import SparseBackend
 from data import IndexResult
 
 
-class SeismicBackend(SparseBackend):
+class SparseSeismicBackend(SparseBackend):
 
     def __init__(self, index_dir: str):
         super().__init__(index_dir)
-        self.index_path = os.path.join(self.index_dir, "cached")
+        try:
+            from seismic import SeismicIndexLV, get_seismic_string
+        except ImportError as exc:
+            raise ImportError("The seismic backend requires the 'seismic' extra (pyseismic-lsr)") from exc
+        self._index_type = SeismicIndexLV
+        self._string_dtype = get_seismic_string()
+        self.path = Path(index_dir) / "vectors.index.seismic"
         self._index = None
 
-    def build(self, corpus_path: str):
-        self._index = SeismicIndex.build(corpus_path)
-        print("Number of documents:", self._index.len)
-        print("Avg number of non-zero components:", self._index.nnz / self._index.len)
-        print("Dimensionality of the vectors:", self._index.dim)
-        self._index.print_space_usage_byte()
-        self._index.save(self.index_path)
+    def build(self, batches):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(dir=self.path.parent) as tmp_dir:
+            index_base = Path(tmp_dir) / "vectors"
+            index_path = Path(tmp_dir) / self.path.name
+            vectors_path = Path(tmp_dir) / "vectors.jsonl"
+            with vectors_path.open("w", encoding="utf-8") as output:
+                for embeddings, ids in batches:
+                    if np.any(embeddings.data < 0):
+                        raise ValueError("Seismic requires nonnegative sparse weights")
+                    for doc_id, start, end in zip(ids, embeddings.indptr[:-1], embeddings.indptr[1:]):
+                        if start != end:
+                            dimensions = embeddings.indices[start:end]
+                            weights = embeddings.data[start:end]
+                            vector = {str(i): float(weight) for i, weight in zip(dimensions, weights)}
+                            output.write(json.dumps({"id": doc_id, "vector": vector}) + "\n")
+            index = None
+            if vectors_path.stat().st_size:
+                index = self._index_type.build(str(vectors_path), load_content=False)
+                index.save(str(index_base))
+            else:
+                index_path.touch()
+            os.replace(index_path, self.path)
+        self._index = index
 
-    def search(self, q: List[str], eq: Dict, ids: List[str], top_k: int) -> Dict[str, List[IndexResult]]:
+    def search(self, embeddings, qids, top_k):
+        results = {qid: [] for qid in qids}
+        if not qids or top_k <= 0:
+            return results
         if self._index is None:
-            self.open()
-        query_components = []
-        query_values = []
-        query_ids = []
-        for qid, query in eq.items():
-            query_ids.append(qid)
-            query_components.append(np.array(list(query.keys()), dtype="U30"))
-            query_values.append(np.array(list(query.values()), dtype=np.float32))
-        search_results = self._index.batch_search(
-            queries_ids=np.array(query_ids, dtype="U30"),
-            query_components=query_components,
-            query_values=query_values,
-            k=top_k,
-            query_cut=20,
-            heap_factor=0.7,
-            sorted=True,
-            n_knn=0
-        )
-        results = defaultdict(list)
-        for sr in search_results:
-            for query_id, score, doc_id in sr:
-                results[query_id].append(IndexResult(doc_id, score))
+            if self.path.stat().st_size == 0:
+                return results
+            self._index = self._index_type.load(str(self.path))
+        if np.any(embeddings.data < 0):
+            raise ValueError("Seismic requires nonnegative sparse weights")
+
+        query_positions, components, weights = [], [], []
+        for pos, (start, end) in enumerate(zip(embeddings.indptr[:-1], embeddings.indptr[1:])):
+            if start != end:
+                query_positions.append(str(pos))
+                components.append(embeddings.indices[start:end].astype(self._string_dtype))
+                weights.append(embeddings.data[start:end])
+        if query_positions:
+            matches = self._index.batch_search(
+                queries_ids=np.array(query_positions, dtype=self._string_dtype),
+                query_components=components,
+                query_values=weights,
+                k=min(top_k, self._index.len),
+                query_cut=max(map(len, components)),
+                heap_factor=0.7,
+            )
+            for hits in matches:
+                for position, score, doc_id in hits:
+                    results[qids[int(position)]].append(IndexResult(doc_id, float(score)))
         return results
 
-    def open(self):
-        self._index = SeismicIndex.load(self.index_path + ".index.seismic")
+    def exists(self):
+        return self.path.is_file()
 
     def close(self):
-        if self._index is not None:
-            self._index = None
-
-    def exists(self) -> bool:
-        return os.path.exists(self.index_path + ".index.seismic")
+        self._index = None

@@ -1,0 +1,10 @@
+[
+  {
+    "name": "sdadas/polish-splade",
+    "type": "sparse",
+    "batch_size": 32,
+    "model_kwargs": {
+      "dtype": "float16"
+    }
+  }
+]

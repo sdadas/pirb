@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict
+from typing import List, Dict, Iterable
+from scipy.sparse import csr_array
 from data import IndexResult
 
 
@@ -33,12 +34,11 @@ class SparseBackend(ABC):
         self.index_dir = index_dir
 
     @abstractmethod
-    def build(self, corpus_path: str):
+    def build(self, batches: Iterable[tuple[csr_array, list[str]]]):
         raise NotImplementedError()
 
     @abstractmethod
-    def search(self, queries: List[str], encoded_queries: Dict,
-               ids: List[str], top_k: int) -> Dict[str, List[IndexResult]]:
+    def search(self, embeddings: csr_array, qids: list[str], top_k: int) -> dict[str, list[IndexResult]]:
         raise NotImplementedError()
 
     @abstractmethod

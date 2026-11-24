@@ -19,22 +19,16 @@ class IndexBackend:
             host = config.get("host", "localhost")
             port = config.get("port", 6333)
             return QdrantBackend(index_dir, host=host, port=port)
-        elif backend_type == "lucene":
-            from backend.sparse import LuceneBackend
-            encoder_provider = config.get("encoder_provider")
-            threads = config.get("threads", 8)
-            return LuceneBackend(index_dir, encoder_provider, threads)
+        elif backend_type == "sparse_csr":
+            from backend.sparse_csr import SparseCSRBackend
+            return SparseCSRBackend(index_dir)
         elif backend_type == "seismic":
-            from backend.sparse_seismic import SeismicBackend
-            return SeismicBackend(index_dir)
+            from backend.sparse_seismic import SparseSeismicBackend
+            return SparseSeismicBackend(index_dir)
         elif backend_type == "plaid":
             from backend.late_interaction import PlaidBackend
             return PlaidBackend(index_dir)
         elif backend_type == "voyager":
             from backend.late_interaction import VoyagerBackend
             return VoyagerBackend(index_dir)
-        elif backend_type == "splade":
-            from backend.sparse_splade import SpladeIndexBackend
-            encoder_provider = config.get("encoder_provider")
-            return SpladeIndexBackend(index_dir, encoder_provider)
         raise AssertionError("Unknown backend type: {}".format(backend_type))

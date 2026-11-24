@@ -34,10 +34,10 @@ class AutoIndex:
             return HybridIndex(args.data_dir, index_name, indices, k0, strategy, task, rerank_limit)
         elif args.mock or index_type == "mock":
             return MockIndex(task, args.data_dir, field=config.get("field", "candidates"))
-        elif index_type == "splade":
-            from .splade import SpladeIndex
-            return SpladeIndex(config, data_dir=cache_dir)
-        elif index_name in ("sparse", "bm25"):
+        elif index_type == "sparse":
+            from .sparse import SparseIndex
+            return SparseIndex(data_dir=cache_dir, encoder=config)
+        elif index_name == "bm25":
             from .bm25 import BM25Index
             lang = config.get("lang", None)
             if hasattr(task, "lang") and getattr(task, "lang") is not None:

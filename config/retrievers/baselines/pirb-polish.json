@@ -4,8 +4,8 @@
   },
   {
     "name": "sdadas/polish-splade",
-    "fp16": true,
-    "type": "splade"
+    "type": "sparse",
+    "model_kwargs": {"dtype": "float16"}
   },
   {
     "name": "models/baseline-mnr",
