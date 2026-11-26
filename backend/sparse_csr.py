@@ -1,14 +1,75 @@
 import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, TemporaryFile
 
 import numpy as np
 from joblib import dump, load
 from numba import get_num_threads, njit, prange, set_num_threads
-from scipy.sparse import csr_array, vstack
+from scipy.sparse import csr_array
 
 from backend.base import SparseBackend
 from data import IndexResult
+
+
+def _as_postings(corpus):
+    postings = corpus.T.tocsr()
+    if max(postings.nnz, *postings.shape) <= np.iinfo(np.int32).max:
+        postings.indptr = postings.indptr.astype(np.int32, copy=False)
+        postings.indices = postings.indices.astype(np.int32, copy=False)
+    return postings
+
+
+@njit(nogil=True)
+def _append_postings(batch_offsets, batch_docs, batch_weights, cursor, doc_indices, weights, doc_start):
+    for dimension in range(cursor.size):
+        start = batch_offsets[dimension]
+        end = batch_offsets[dimension + 1]
+        if start == end:
+            continue
+        dest = cursor[dimension]
+        stop = dest + (end - start)
+        doc_indices[dest:stop] = batch_docs[start:end] + doc_start
+        weights[dest:stop] = batch_weights[start:end]
+        cursor[dimension] = stop
+
+
+def _build_postings(batches, scratch):
+    ids, doc_starts, dtypes = [], [], set()
+    counts = None
+    for embeddings, batch_ids in batches:
+        if len(batch_ids) != embeddings.shape[0]:
+            raise ValueError("Sparse vector batch must have one document ID per row")
+        batch = _as_postings(embeddings)
+        if counts is None:
+            counts = np.zeros(batch.shape[0], dtype=np.int64)
+        if batch.shape[0] != counts.size:
+            raise ValueError("All sparse vector batches must have the same dimension")
+        counts += np.diff(batch.indptr)
+        np.save(scratch, batch.indptr, allow_pickle=False)
+        np.save(scratch, batch.indices, allow_pickle=False)
+        np.save(scratch, batch.data, allow_pickle=False)
+        dtypes.add(batch.dtype)
+        doc_starts.append(len(ids))
+        ids.extend(batch_ids)
+
+    dimensions = 0 if counts is None else counts.size
+    nnz = 0 if counts is None else int(counts.sum())
+    index_dtype = np.int32 if max(dimensions, len(ids), nnz) <= np.iinfo(np.int32).max else np.int64
+    offsets = np.zeros(dimensions + 1, dtype=index_dtype)
+    if counts is not None:
+        np.cumsum(counts, out=offsets[1:])
+    cursor = offsets[:-1].copy()
+    doc_indices = np.empty(nnz, dtype=index_dtype)
+    weights = np.empty(nnz, dtype=np.result_type(*dtypes) if dtypes else np.float32)
+    # The Python path also handles SciPy dtypes such as long double, which Numba cannot compile.
+    append = _append_postings if weights.dtype in (np.float32, np.float64) else _append_postings.py_func
+    scratch.seek(0)
+    for doc_start in doc_starts:
+        batch_offsets = np.load(scratch, allow_pickle=False)
+        batch_docs = np.load(scratch, allow_pickle=False).astype(index_dtype, copy=False)
+        batch_weights = np.load(scratch, allow_pickle=False).astype(weights.dtype, copy=False)
+        append(batch_offsets, batch_docs, batch_weights, cursor, doc_indices, weights, doc_start)
+    return csr_array((weights, doc_indices, offsets), shape=(dimensions, len(ids))), ids
 
 
 @njit(parallel=True, nogil=True)
@@ -48,31 +109,22 @@ class SparseCSRBackend(SparseBackend):
         self._index = None
 
     def build(self, batches):
-        vectors, ids = [], []
-        for embeddings, batch_ids in batches:
-            vectors.append(embeddings)
-            ids.extend(batch_ids)
-        corpus = vstack(vectors, format="csr") if vectors else csr_array((0, 0), dtype=np.float32)
+        self._index = None
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with TemporaryDirectory(dir=self.path.parent) as tmp_dir:
             tmp_path = Path(tmp_dir) / self.path.name
-            dump((corpus, ids), tmp_path, compress=3)
-            index = self._prepare_index(corpus, ids)
+            with TemporaryFile(dir=tmp_dir) as scratch:
+                postings, ids = _build_postings(batches, scratch)
+            # Keep the document-by-dimension layout on disk, in CSC so reopening can reuse the arrays.
+            dump((postings.T, ids), tmp_path, compress=1)
             os.replace(tmp_path, self.path)
-        self._index = index
-
-    @staticmethod
-    def _prepare_index(corpus, ids):
-        postings = corpus.T.tocsr()
-        if postings.dtype == np.float32 and max(postings.nnz, *postings.shape) <= np.iinfo(np.int32).max:
-            postings.indptr = postings.indptr.astype(np.int32, copy=False)
-            postings.indices = postings.indices.astype(np.int32, copy=False)
-        return postings, ids
+        self._index = postings, ids
 
     def search(self, embeddings, qids, top_k):
         if self._index is None:
             corpus, ids = load(self.path)
-            self._index = self._prepare_index(corpus, ids)
+            self._index = _as_postings(corpus), ids
+            del corpus
         corpus_t, ids = self._index
         k = min(top_k, len(ids))
         if k <= 0:
