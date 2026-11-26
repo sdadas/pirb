@@ -116,7 +116,7 @@ class SparseCSRBackend(SparseBackend):
             with TemporaryFile(dir=tmp_dir) as scratch:
                 postings, ids = _build_postings(batches, scratch)
             # Keep the document-by-dimension layout on disk, in CSC so reopening can reuse the arrays.
-            dump((postings.T, ids), tmp_path, compress=1)
+            dump((postings.T, ids), tmp_path, compress=0)
             os.replace(tmp_path, self.path)
         self._index = postings, ids
 
