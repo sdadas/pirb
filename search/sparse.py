@@ -5,6 +5,7 @@ from copy import deepcopy
 from itertools import batched
 from pathlib import Path
 
+import torch
 from scipy.sparse import csr_array
 from sentence_transformers import SparseEncoder
 from tqdm import tqdm
@@ -70,9 +71,18 @@ class SparseIndex(SearchIndex):
     @staticmethod
     def _encode_batch(encode, batch, options):
         ids = [item.id for item in batch]
-        embeddings = encode([item.text for item in batch], **options).coalesce()
-        rows, columns = embeddings.indices().numpy()
-        values = embeddings.values().float().numpy()
+        previous_threads = torch.get_num_threads()
+        # Splitting sparse CPU tensors into rows is slower with large thread pools.
+        limit_threads = previous_threads > 1
+        if limit_threads:
+            torch.set_num_threads(1)
+        try:
+            embeddings = encode([item.text for item in batch], **options).coalesce()
+            rows, columns = embeddings.indices().numpy()
+            values = embeddings.values().float().numpy()
+        finally:
+            if limit_threads:
+                torch.set_num_threads(previous_threads)
         return csr_array((values, (rows, columns)), shape=embeddings.shape), ids
 
     def build(self, docs: Iterable[IndexInput]):
